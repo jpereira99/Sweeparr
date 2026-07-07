@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: #0c0f16;
+}
+
+body {
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  color: #e8ecf4;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Focus ring: 2px accent, 2px offset, never suppressed (§09). */
+:focus-visible {
+  outline: 2px solid #5b8def;
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #232b3d;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+  }
+}
+
+.striped-candidate {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(217, 168, 60, 0.16) 0 4px,
+    rgba(217, 168, 60, 0.05) 4px 8px
+  );
+}
+
+.poster-placeholder {
+  background: repeating-linear-gradient(45deg, #1a2130 0 5px, #141a26 5px 10px);
+}

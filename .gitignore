@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Built SPA (generated into the backend by Vite)
+backend/static/spa/
+
+# Runtime data
+config/
+*.db
+*.db-wal
+*.db-shm
+.env
+
+# Design spec decode helpers
+design/_decode_spec.py
+design/_decoded_design.html
+
+# OS
+.DS_Store

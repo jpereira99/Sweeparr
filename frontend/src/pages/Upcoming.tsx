@@ -1,0 +1,325 @@
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { endpoints } from "../lib/api";
+import { PageHeader } from "./Dashboard";
+import { StatusPill } from "../components/StatusPill";
+import { WhyPopover } from "../components/WhyPopover";
+import { Button, Chip, EmptyState, Poster, Skeleton } from "../components/ui";
+import { useToast } from "../components/Toast";
+import { countdown, gb } from "../lib/format";
+
+export function Upcoming() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [view, setView] = useState<"calendar" | "list">("calendar");
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["schedule"],
+    queryFn: endpoints.schedule,
+  });
+
+  const units = useMemo(() => {
+    let u: any[] = data?.units ?? [];
+    if (typeFilter === "tv") u = u.filter((x) => x.unit_type === "season");
+    if (typeFilter === "movie") u = u.filter((x) => x.unit_type === "movie");
+    return u;
+  }, [data, typeFilter]);
+
+  async function keep(u: any) {
+    await endpoints.keepUnit(u.unit_type, u.unit_id, { days: 30 });
+    toast(`Kept ${u.title} for 30 days`, async () => {
+      await endpoints.unschedule(u.unit_type, u.unit_id);
+      qc.invalidateQueries();
+    });
+    qc.invalidateQueries();
+  }
+  async function postpone(u: any) {
+    await endpoints.postpone(u.unit_type, u.unit_id, 30);
+    toast(`Postponed ${u.title} +30d`);
+    qc.invalidateQueries();
+  }
+  async function deleteNow(u: any) {
+    if (!confirm(`Delete ${u.title} now? This executes immediately.`)) return;
+    const r = await endpoints.deleteNow(u.unit_type, u.unit_id);
+    toast(r.result?.skipped ? "System paused — nothing deleted" : `Deleted ${u.title}`);
+    qc.invalidateQueries();
+  }
+
+  return (
+    <div>
+      <PageHeader title="Upcoming Removals" subtitle="everything scheduled sits here for its whole grace window" />
+
+      <div className="mb-4 flex items-center gap-3">
+        <span className="font-mono text-[12px] text-state-scheduled-ink">
+          {data?.scheduled_count ?? 0} scheduled · {gb(data?.total_gb)}
+        </span>
+        {data?.system_enabled === false && (
+          <span className="font-mono text-[11px] text-state-error-ink">■ system paused</span>
+        )}
+        <span className="ml-auto inline-flex overflow-hidden rounded border border-line">
+          {(["calendar", "list"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`px-3.5 py-1.5 text-[12.5px] capitalize ${
+                view === v ? "bg-accent-subtle text-ink-hi" : "text-ink-mid"
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </span>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Chip active={typeFilter === "tv"} onClick={() => setTypeFilter(typeFilter === "tv" ? null : "tv")}>
+          TV seasons {typeFilter === "tv" ? "✕" : ""}
+        </Chip>
+        <Chip active={typeFilter === "movie"} onClick={() => setTypeFilter(typeFilter === "movie" ? null : "movie")}>
+          Movies {typeFilter === "movie" ? "✕" : ""}
+        </Chip>
+      </div>
+
+      {isLoading ? (
+        <Skeleton rows={6} />
+      ) : units.length === 0 ? (
+        <EmptyState title="Nothing is scheduled">
+          When an enabled rule matches something, it appears here for the grace window before deletion.{" "}
+          <button className="text-accent-hover" onClick={() => navigate("/rules")}>
+            Review rules
+          </button>
+        </EmptyState>
+      ) : view === "calendar" ? (
+        <CalendarView units={units} />
+      ) : (
+        <ListView
+          units={units}
+          selected={selected}
+          setSelected={setSelected}
+          keep={keep}
+          postpone={postpone}
+          deleteNow={deleteNow}
+          navigate={navigate}
+        />
+      )}
+    </div>
+  );
+}
+
+function CalendarView({ units }: { units: any[] }) {
+  const today = new Date();
+  const start = new Date(today);
+  const day = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - day);
+  start.setHours(0, 0, 0, 0);
+
+  const byDay = new Map<string, any[]>();
+  for (const u of units) {
+    if (!u.delete_at) continue;
+    const key = new Date(u.delete_at).toDateString();
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key)!.push(u);
+  }
+
+  const cells = Array.from({ length: 28 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return d;
+  });
+  const maxCount = Math.max(1, ...Array.from(byDay.values()).map((v) => v.length));
+
+  return (
+    <div className="rounded-lg border border-line bg-bg p-4">
+      <div className="mb-1 grid grid-cols-7 gap-1.5">
+        {["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map((d) => (
+          <div key={d} className="px-1.5 py-1 text-[10.5px] font-semibold tracking-[0.08em] text-ink-faint">
+            {d}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1.5">
+        {cells.map((d, i) => {
+          const items = byDay.get(d.toDateString()) ?? [];
+          const isToday = d.toDateString() === today.toDateString();
+          const hasItems = items.length > 0;
+          const heat = Math.round((items.length / maxCount) * 100);
+          return (
+            <div
+              key={i}
+              className="relative flex h-40 flex-col gap-1 overflow-hidden rounded-lg p-2"
+              style={{
+                background: hasItems ? "#0C0F16" : "#0A0D12",
+                border: isToday
+                  ? "1px solid rgba(91,141,239,0.55)"
+                  : hasItems
+                  ? "1px solid rgba(229,72,77,0.4)"
+                  : "1px solid #141A26",
+              }}
+            >
+              {hasItems && (
+                <div className="absolute left-0 top-0 h-[3px] bg-state-scheduled" style={{ width: `${heat}%` }} />
+              )}
+              <div className="mt-0.5 flex justify-between">
+                <span className={`font-mono text-[11px] ${hasItems || isToday ? "text-ink-hi" : "text-ink-faint"}`}>
+                  {d.getDate()}
+                </span>
+                {isToday && <span className="text-[10px] text-ink-low">today</span>}
+              </div>
+              {items.slice(0, 3).map((u) => (
+                <div
+                  key={u.key}
+                  className="truncate rounded border border-line-subtle bg-bg-raised px-1.5 py-1 text-[10px] text-ink-hi"
+                >
+                  {u.title}
+                  {u.season_number ? ` S${u.season_number}` : ""}
+                </div>
+              ))}
+              {items.length > 3 && (
+                <div className="mt-auto rounded bg-[rgba(229,72,77,0.1)] px-1 py-0.5 text-center font-mono text-[9.5px] text-state-scheduled-ink">
+                  +{items.length - 3} more
+                </div>
+              )}
+              {hasItems && items.length <= 3 && (
+                <div className="mt-auto font-mono text-[9.5px] text-ink-low">
+                  {items.length} · {gb(items.reduce((a, x) => a + x.size_gb, 0))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ListView({ units, selected, setSelected, keep, postpone, deleteNow, navigate }: any) {
+  const cols = "grid-cols-[36px_56px_minmax(180px,1.4fr)_220px_120px_1fr_90px_190px]";
+  const toggle = (k: string) => {
+    const next = new Set<string>(selected);
+    next.has(k) ? next.delete(k) : next.add(k);
+    setSelected(next);
+  };
+  return (
+    <div className="overflow-hidden rounded-lg border border-line bg-bg">
+      <div className="flex items-center gap-3 border-b border-line-subtle bg-bg-raised px-6 py-3.5 text-[12.5px] text-ink-mid">
+        <span>List view · sorted by delete date (errors pinned)</span>
+        {selected.size > 0 && (
+          <span className="ml-auto text-ink-hi">{selected.size} selected</span>
+        )}
+      </div>
+      <div className={`grid ${cols} gap-x-3 border-b border-line-subtle px-6 py-2`}>
+        {["", "", "TITLE", "STATUS", "DELETES", "RULE · WHY", "FREES", "ACTIONS"].map((h, i) => (
+          <span key={i} className={`text-[10.5px] font-semibold tracking-[0.08em] text-ink-low ${i >= 6 ? "text-right" : ""}`}>
+            {h}
+          </span>
+        ))}
+      </div>
+      {units.map((u: any) => {
+        const cd = countdown(u.days_until);
+        return (
+          <div key={u.key} className={`grid ${cols} items-center gap-x-3 border-b border-[#141A26] px-6 py-2`}>
+            <span>
+              {u.state !== "ERROR" && (
+                <input
+                  type="checkbox"
+                  checked={selected.has(u.key)}
+                  onChange={() => toggle(u.key)}
+                  className="h-3.5 w-3.5 accent-accent"
+                />
+              )}
+            </span>
+            <Poster size={40} />
+            <span>
+              <button
+                onClick={() => navigate("/library")}
+                className="block text-left text-[13px] font-medium text-ink-hi"
+              >
+                {u.title}
+                {u.season_number ? (
+                  <span className="ml-1 rounded bg-accent-subtle px-1.5 py-0.5 font-mono text-[10.5px] text-accent-hover">
+                    S{u.season_number}
+                  </span>
+                ) : null}
+              </button>
+              <span className="text-[11.5px] text-ink-low">
+                {u.unit_type === "season" ? "TV" : "Movie"}
+                {u.last_watched_days != null ? ` · last watched ${u.last_watched_days}d ago` : ""}
+              </span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <StatusPill state={u.state} size="sm" date={u.delete_at} />
+              <WhyPopover ruleName={u.rule_name} snapshot={u.snapshot} />
+            </span>
+            <span>
+              {u.state === "ERROR" ? (
+                <span className="font-mono text-[11.5px] text-state-error-ink">held</span>
+              ) : cd.urgent ? (
+                <span className="rounded bg-state-scheduled px-2 py-0.5 font-mono text-[11.5px] font-semibold text-white">
+                  {cd.label}
+                </span>
+              ) : (
+                <span className="rounded bg-[rgba(229,72,77,0.12)] px-2 py-0.5 font-mono text-[11.5px] text-state-scheduled-ink">
+                  {cd.label}
+                </span>
+              )}
+            </span>
+            <span className="text-[12px] text-ink-mid">
+              {u.state === "ERROR" ? (
+                <span className="text-state-error-ink">Deletion failed — check the integration in Settings</span>
+              ) : (
+                <>
+                  {u.rule_name} — {u.reason_public}
+                </>
+              )}
+            </span>
+            <span className="text-right font-mono text-[12px] text-ink-hi">{gb(u.size_gb)}</span>
+            <span className="flex justify-end gap-1.5">
+              {u.state === "ERROR" ? (
+                <>
+                  <Button size="sm" variant="warn" onClick={() => deleteNow(u)}>
+                    Retry
+                  </Button>
+                  <Button size="sm" variant="keep" onClick={() => keep(u)}>
+                    ✓ Keep
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button size="sm" variant="keep" onClick={() => keep(u)}>
+                    ✓ Keep
+                  </Button>
+                  <Button size="sm" onClick={() => postpone(u)}>
+                    +30d
+                  </Button>
+                </>
+              )}
+            </span>
+          </div>
+        );
+      })}
+      {selected.size > 0 && <BulkBar units={units} selected={selected} keep={keep} postpone={postpone} deleteNow={deleteNow} />}
+    </div>
+  );
+}
+
+function BulkBar({ units, selected, keep, postpone, deleteNow }: any) {
+  const chosen = units.filter((u: any) => selected.has(u.key));
+  return (
+    <div className="flex items-center gap-3 border-t border-line-subtle bg-bg-raised px-6 py-3">
+      <span className="text-[12px] text-ink-mid">{chosen.length} selected</span>
+      <Button size="sm" variant="keep" onClick={() => chosen.forEach(keep)}>
+        ✓ Keep
+      </Button>
+      <Button size="sm" onClick={() => chosen.forEach(postpone)}>
+        Postpone +30d
+      </Button>
+      <Button size="sm" variant="danger" onClick={() => chosen.forEach(deleteNow)}>
+        Delete now
+      </Button>
+    </div>
+  );
+}
