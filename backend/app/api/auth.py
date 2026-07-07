@@ -3,6 +3,7 @@
 Login tries the local admin (password stored hashed in DB) first, then falls
 through to Jellyfin ``/Users/AuthenticateByName`` for Jellyfin administrators.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -47,8 +48,10 @@ def _make_cookie(payload: dict) -> str:
 async def bootstrap_local_admin(session: AsyncSession) -> None:
     """Create the local admin from env when no password_hash user exists."""
     existing = (
-        await session.execute(select(User).where(User.password_hash.isnot(None)))
-    ).scalars().first()
+        (await session.execute(select(User).where(User.password_hash.isnot(None))))
+        .scalars()
+        .first()
+    )
     if existing:
         return
     cfg = get_settings()
@@ -62,7 +65,9 @@ async def bootstrap_local_admin(session: AsyncSession) -> None:
     log.info("bootstrapped local admin user %r", cfg.admin_username)
 
 
-async def current_principal(request: Request, session: AsyncSession = Depends(get_session)) -> Principal:
+async def current_principal(
+    request: Request, session: AsyncSession = Depends(get_session)
+) -> Principal:
     token = request.cookies.get(_settings.session_cookie)
     if token:
         try:
@@ -86,13 +91,15 @@ async def require_admin(principal: Principal = Depends(current_principal)) -> Pr
 
 
 def _set_session_cookie(response: Response, user: User, *, is_local: bool) -> None:
-    cookie = _make_cookie({
-        "uid": user.id,
-        "name": user.name,
-        "admin": user.is_admin,
-        "jf": user.jellyfin_id,
-        "local": is_local,
-    })
+    cookie = _make_cookie(
+        {
+            "uid": user.id,
+            "name": user.name,
+            "admin": user.is_admin,
+            "jf": user.jellyfin_id,
+            "local": is_local,
+        }
+    )
     response.set_cookie(
         _settings.session_cookie,
         cookie,
@@ -103,13 +110,21 @@ def _set_session_cookie(response: Response, user: User, *, is_local: bool) -> No
 
 
 @router.post("/login")
-async def login(body: LoginIn, response: Response, session: AsyncSession = Depends(get_session)):
+async def login(
+    body: LoginIn, response: Response, session: AsyncSession = Depends(get_session)
+):
     # 1. Local admin account
     local = (
-        await session.execute(
-            select(User).where(User.name == body.username, User.password_hash.isnot(None))
+        (
+            await session.execute(
+                select(User).where(
+                    User.name == body.username, User.password_hash.isnot(None)
+                )
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if local and verify_password(body.password, local.password_hash or ""):
         _set_session_cookie(response, local, is_local=True)
         return {"id": local.id, "name": local.name, "is_admin": local.is_admin}
@@ -131,9 +146,17 @@ async def login(body: LoginIn, response: Response, session: AsyncSession = Depen
     user_obj = jf_user.get("User", jf_user)
     jf_id = user_obj.get("Id")
     is_admin = bool(user_obj.get("Policy", {}).get("IsAdministrator"))
-    user = (await session.execute(select(User).where(User.jellyfin_id == jf_id))).scalars().first()
+    user = (
+        (await session.execute(select(User).where(User.jellyfin_id == jf_id)))
+        .scalars()
+        .first()
+    )
     if user is None:
-        user = User(jellyfin_id=jf_id, name=user_obj.get("Name", body.username), is_admin=is_admin)
+        user = User(
+            jellyfin_id=jf_id,
+            name=user_obj.get("Name", body.username),
+            is_admin=is_admin,
+        )
         session.add(user)
     user.is_admin = is_admin
     await session.commit()
@@ -165,14 +188,18 @@ async def change_password(
     principal: Principal = Depends(require_admin),
 ):
     if not principal.is_local or principal.user_id is None:
-        raise HTTPException(status_code=400, detail="Only local admin accounts can change password here")
+        raise HTTPException(
+            status_code=400, detail="Only local admin accounts can change password here"
+        )
     user = await session.get(User, principal.user_id)
     if user is None or not user.password_hash:
         raise HTTPException(status_code=400, detail="No local password on this account")
     if not verify_password(body.current_password, user.password_hash):
         raise HTTPException(status_code=401, detail="Current password is incorrect")
     if len(body.new_password) < 8:
-        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+        raise HTTPException(
+            status_code=400, detail="New password must be at least 8 characters"
+        )
     user.password_hash = hash_password(body.new_password)
     await session.commit()
     return {"ok": True}

@@ -1,7 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-type Snapshot = Record<string, { value: any; cmp: string; threshold: any; passed: boolean }>;
+type Snapshot = Record<
+  string,
+  { value: any; cmp: string; threshold: any; passed: boolean }
+>;
 
 const PANEL_W = 320;
 
@@ -79,10 +82,13 @@ export function WhyPopover({
         style={{ top: pos.top, left: pos.left }}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-low">{title}</div>
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-low">
+          {title}
+        </div>
         {ruleName && (
           <div className="mb-2.5 text-[12.5px] text-ink-hi">
-            Matched by rule <span className="font-semibold text-accent-hover">{ruleName}</span>
+            Matched by rule{" "}
+            <span className="font-semibold text-accent-hover">{ruleName}</span>
           </div>
         )}
         {snapshot && (
@@ -95,7 +101,11 @@ export function WhyPopover({
                 <span className="shrink-0 text-ink-mid">{field}</span>
                 <span className="text-right text-ink-hi">
                   {String(v.value)}{" "}
-                  <span className={v.passed ? "text-state-kept-ink" : "text-ink-low"}>
+                  <span
+                    className={
+                      v.passed ? "text-state-kept-ink" : "text-ink-low"
+                    }
+                  >
                     {v.cmp} {String(v.threshold)} {v.passed ? "✓" : "✗"}
                   </span>
                 </span>

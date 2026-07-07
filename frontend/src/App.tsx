@@ -47,7 +47,11 @@ function AdminApp() {
 
 export default function App() {
   const location = useLocation();
-  const { data: me, isLoading, isError } = useQuery({ queryKey: ["me"], queryFn: endpoints.me, retry: false });
+  const {
+    data: me,
+    isLoading,
+    isError,
+  } = useQuery({ queryKey: ["me"], queryFn: endpoints.me, retry: false });
 
   if (location.pathname.startsWith("/keep/")) {
     return (
@@ -57,7 +61,8 @@ export default function App() {
     );
   }
 
-  if (isLoading) return <div className="p-10 font-mono text-ink-low">Loading Sweeparr…</div>;
+  if (isLoading)
+    return <div className="p-10 font-mono text-ink-low">Loading Sweeparr…</div>;
   if (isError || !me?.is_admin) return <Login />;
 
   return <AdminApp />;

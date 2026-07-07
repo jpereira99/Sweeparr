@@ -3,6 +3,7 @@
 One container: FastAPI serves the API, runs the scheduler, and serves the built
 React SPA as static files (§3). SQLite in WAL mode. No sidecars.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -22,7 +23,11 @@ from .config import get_settings
 from .db import SessionLocal, init_db
 from .models import MediaItem
 from .services import scheduler
-from .services.integrations import get_integrations, load_integrations, probe_integrations
+from .services.integrations import (
+    get_integrations,
+    load_integrations,
+    probe_integrations,
+)
 from .services.runtime import bootstrap_integrations_from_env, is_system_enabled
 from .services.sync import run_library_syncs
 
@@ -39,7 +44,9 @@ INJECT_DIR = STATIC_DIR / "inject"
 async def _bootstrap_library_if_empty() -> None:
     try:
         async with SessionLocal() as session:
-            count = (await session.execute(select(func.count()).select_from(MediaItem))).scalar_one()
+            count = (
+                await session.execute(select(func.count()).select_from(MediaItem))
+            ).scalar_one()
         if count:
             return
         integ = get_integrations()
@@ -132,6 +139,7 @@ if SPA_DIR.exists():
         if index.exists():
             return FileResponse(index)
         return JSONResponse({"detail": "SPA not built"}, status_code=404)
+
 else:
 
     @app.get("/")

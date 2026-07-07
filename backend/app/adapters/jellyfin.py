@@ -4,6 +4,7 @@ Reads items/users/sessions and item UserData; writes are limited to library
 refresh and collection maintenance (never the filesystem). Auth is credential
 pass-through via ``/Users/AuthenticateByName``.
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -31,7 +32,9 @@ class JellyfinAdapter(IntegrationAdapter):
     async def get_users(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/Users") or []
 
-    async def get_items(self, *, start_index: int = 0, limit: int = 200) -> list[dict[str, Any]]:
+    async def get_items(
+        self, *, start_index: int = 0, limit: int = 200
+    ) -> list[dict[str, Any]]:
         fields = "ProviderIds,Path,DateCreated,UserData,RunTimeTicks"
         data = await self._request(
             "GET",
@@ -72,7 +75,9 @@ class JellyfinAdapter(IntegrationAdapter):
         limit: int = 200,
     ):
         """Yield items a user has played or partially watched (UserData populated)."""
-        fields = "UserData,RunTimeTicks,ProviderIds,SeriesId,ParentIndexNumber,IndexNumber"
+        fields = (
+            "UserData,RunTimeTicks,ProviderIds,SeriesId,ParentIndexNumber,IndexNumber"
+        )
         seen: set[str] = set()
         for filters in ("IsPlayed", "IsResumable"):
             start = 0
@@ -100,7 +105,9 @@ class JellyfinAdapter(IntegrationAdapter):
     async def refresh_library(self) -> None:
         await self._request("POST", "/Library/Refresh")
 
-    async def authenticate(self, username: str, password: str) -> Optional[dict[str, Any]]:
+    async def authenticate(
+        self, username: str, password: str
+    ) -> Optional[dict[str, Any]]:
         """Credential pass-through login (§11).
 
         Returns the Jellyfin user object with Policy on success, ``None`` when
@@ -123,11 +130,15 @@ class JellyfinAdapter(IntegrationAdapter):
                     json={"Username": username, "Pw": password},
                 )
         except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
-            raise JellyfinUnreachable(f"cannot connect to {self.base_url}: {exc}") from exc
+            raise JellyfinUnreachable(
+                f"cannot connect to {self.base_url}: {exc}"
+            ) from exc
         except httpx.TimeoutException as exc:
             raise JellyfinUnreachable(f"timed out contacting {self.base_url}") from exc
         except httpx.HTTPError as exc:
-            raise JellyfinUnreachable(f"request to {self.base_url} failed: {exc}") from exc
+            raise JellyfinUnreachable(
+                f"request to {self.base_url} failed: {exc}"
+            ) from exc
 
         if resp.status_code in (401, 403):
             return None  # genuine credential rejection

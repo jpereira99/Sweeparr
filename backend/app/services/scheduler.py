@@ -4,6 +4,7 @@ AsyncIOScheduler, in-process. All jobs: max_instances=1, coalesce=True,
 misfire_grace_time set — a NAS reboot must not cause a thundering herd or
 double execution. Every run lands in the ``job_run`` table.
 """
+
 from __future__ import annotations
 
 import logging
@@ -96,7 +97,11 @@ async def job_housekeeping(session):
     from ..models import PlaybackEvent
 
     cutoff = utcnow() - timedelta(days=90)
-    old = (await session.execute(select(PlaybackEvent).where(PlaybackEvent.ts < cutoff))).scalars().all()
+    old = (
+        (await session.execute(select(PlaybackEvent).where(PlaybackEvent.ts < cutoff)))
+        .scalars()
+        .all()
+    )
     for e in old:
         await session.delete(e)
     await session.commit()
@@ -155,9 +160,11 @@ def job_states() -> list[dict[str, Any]]:
         job = scheduler.get_job(name)
         nxt = job.next_run_time if job else None
         paused = job is not None and job.next_run_time is None
-        out.append({
-            "name": name,
-            "next_run": nxt.astimezone(timezone.utc).isoformat() if nxt else None,
-            "paused": paused,
-        })
+        out.append(
+            {
+                "name": name,
+                "next_run": nxt.astimezone(timezone.utc).isoformat() if nxt else None,
+                "paused": paused,
+            }
+        )
     return out

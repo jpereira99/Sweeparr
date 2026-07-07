@@ -1,4 +1,5 @@
 """Runtime operational settings — DB-backed."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -70,10 +71,19 @@ async def get_integration_config(session: AsyncSession, service: str) -> dict[st
 
 
 async def all_integration_configs(session: AsyncSession) -> dict[str, dict[str, str]]:
-    return {svc: await get_integration_config(session, svc) for svc in INTEGRATION_SERVICES}
+    return {
+        svc: await get_integration_config(session, svc) for svc in INTEGRATION_SERVICES
+    }
 
 
-async def set_integration_config(session: AsyncSession, service: str, *, url: str | None = None, api_key: str | None = None, topic: str | None = None) -> dict[str, str]:
+async def set_integration_config(
+    session: AsyncSession,
+    service: str,
+    *,
+    url: str | None = None,
+    api_key: str | None = None,
+    topic: str | None = None,
+) -> dict[str, str]:
     current = await get_integration_config(session, service)
     if url is not None:
         current["url"] = url
@@ -94,6 +104,14 @@ async def bootstrap_integrations_from_env(session: AsyncSession) -> None:
             continue
         env_cfg = bootstrap.get(service, {})
         if not any(env_cfg.get(k) for k in ("url", "api_key", "topic")):
-            await set_setting(session, key, {"url": "", "api_key": "", **({"topic": ""} if service == "ntfy" else {})})
+            await set_setting(
+                session,
+                key,
+                {
+                    "url": "",
+                    "api_key": "",
+                    **({"topic": ""} if service == "ntfy" else {}),
+                },
+            )
         else:
             await set_setting(session, key, env_cfg)

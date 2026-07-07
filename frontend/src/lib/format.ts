@@ -7,11 +7,19 @@ export function fmtDate(iso?: string | null): string {
 export function fmtDateTime(iso?: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 /** Countdown urgency is also worded — "TONIGHT", not just filled-red (§09). */
-export function countdown(daysUntil?: number | null): { label: string; urgent: boolean } {
+export function countdown(daysUntil?: number | null): {
+  label: string;
+  urgent: boolean;
+} {
   if (daysUntil == null) return { label: "held", urgent: false };
   if (daysUntil <= 0.7) return { label: "TONIGHT", urgent: true };
   const d = Math.round(daysUntil);

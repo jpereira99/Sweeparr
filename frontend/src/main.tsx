@@ -7,7 +7,9 @@ import { ToastProvider } from "./components/Toast";
 import "./index.css";
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 1, staleTime: 5000 } },
+  defaultOptions: {
+    queries: { refetchOnWindowFocus: false, retry: 1, staleTime: 5000 },
+  },
 });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -19,5 +21,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </ToastProvider>
       </BrowserRouter>
     </QueryClientProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

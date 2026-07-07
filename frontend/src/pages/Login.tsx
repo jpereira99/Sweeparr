@@ -28,9 +28,16 @@ export function Login() {
 
   return (
     <div className="flex min-h-screen items-center justify-center">
-      <form onSubmit={submit} className="w-[340px] rounded-lg border border-line-subtle bg-bg-raised p-7">
-        <div className="mb-1 font-mono text-[15px] font-semibold text-ink-hi">▚ SWEEPARR</div>
-        <div className="mb-6 text-[12px] text-ink-low">Sign in with your local admin or Jellyfin account</div>
+      <form
+        onSubmit={submit}
+        className="w-[340px] rounded-lg border border-line-subtle bg-bg-raised p-7"
+      >
+        <div className="mb-1 font-mono text-[15px] font-semibold text-ink-hi">
+          ▚ SWEEPARR
+        </div>
+        <div className="mb-6 text-[12px] text-ink-low">
+          Sign in with your local admin or Jellyfin account
+        </div>
         <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-low">
           Username
         </label>
@@ -49,7 +56,11 @@ export function Login() {
           onChange={(e) => setPassword(e.target.value)}
           className="mb-5 h-9 w-full rounded border border-line bg-bg px-3 text-[13px] text-ink-hi outline-none focus:border-accent"
         />
-        {error && <div className="mb-4 text-[12px] text-state-scheduled-ink">{error}</div>}
+        {error && (
+          <div className="mb-4 text-[12px] text-state-scheduled-ink">
+            {error}
+          </div>
+        )}
         <Button variant="primary" disabled={busy}>
           {busy ? "Signing in…" : "Sign in"}
         </Button>

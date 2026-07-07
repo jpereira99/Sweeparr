@@ -1,8 +1,18 @@
 import { ReactNode } from "react";
 
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function Card({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className={`rounded-lg border border-line-subtle bg-bg p-5 ${className}`}>{children}</div>
+    <div
+      className={`rounded-lg border border-line-subtle bg-bg p-5 ${className}`}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -23,7 +33,13 @@ export function Poster({ size = 40 }: { size?: number }) {
   );
 }
 
-export function Mono({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function Mono({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return <span className={`font-mono ${className}`}>{children}</span>;
 }
 
@@ -36,13 +52,25 @@ type BtnProps = {
   title?: string;
 };
 
-export function Button({ children, onClick, variant = "ghost", disabled, size = "md", title }: BtnProps) {
-  const h = size === "sm" ? "h-[26px] text-[11.5px] px-2.5" : "h-8 px-3.5 text-[12.5px]";
+export function Button({
+  children,
+  onClick,
+  variant = "ghost",
+  disabled,
+  size = "md",
+  title,
+}: BtnProps) {
+  const h =
+    size === "sm"
+      ? "h-[26px] text-[11.5px] px-2.5"
+      : "h-8 px-3.5 text-[12.5px]";
   const styles: Record<string, string> = {
     primary: "bg-accent text-bg font-semibold hover:bg-accent-hover",
-    ghost: "border border-line text-ink-mid hover:text-ink-hi hover:border-ink-low",
+    ghost:
+      "border border-line text-ink-mid hover:text-ink-hi hover:border-ink-low",
     keep: "bg-[rgba(63,162,111,0.16)] border border-[rgba(63,162,111,0.45)] text-state-kept-ink font-semibold",
-    danger: "bg-[rgba(229,72,77,0.14)] border border-[rgba(229,72,77,0.45)] text-state-scheduled-ink font-semibold",
+    danger:
+      "bg-[rgba(229,72,77,0.14)] border border-[rgba(229,72,77,0.45)] text-state-scheduled-ink font-semibold",
     warn: "border border-[rgba(247,104,8,0.5)] text-state-error-ink font-semibold",
   };
   return (
@@ -80,7 +108,13 @@ export function Chip({
   );
 }
 
-export function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+export function Toggle({
+  on,
+  onChange,
+}: {
+  on: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <button
       role="switch"
@@ -91,13 +125,22 @@ export function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) =
     >
       <span
         className="absolute top-[2px] h-[14px] w-[14px] rounded-pill transition-all"
-        style={{ background: on ? "#0C0F16" : "#5E6A80", left: on ? "18px" : "2px" }}
+        style={{
+          background: on ? "#0C0F16" : "#5E6A80",
+          left: on ? "18px" : "2px",
+        }}
       />
     </button>
   );
 }
 
-export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
+export function EmptyState({
+  title,
+  children,
+}: {
+  title: string;
+  children?: ReactNode;
+}) {
   return (
     <div className="rounded-lg border border-dashed border-line p-5 text-center">
       <div className="mb-1 text-[13px] font-medium text-ink-hi">{title}</div>
@@ -112,9 +155,10 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}
-          className="h-10 rounded animate-swp-shimmer"
+          className="h-10 animate-swp-shimmer rounded"
           style={{
-            background: "linear-gradient(90deg,#121722 25%,#1A2130 50%,#121722 75%)",
+            background:
+              "linear-gradient(90deg,#121722 25%,#1A2130 50%,#121722 75%)",
             backgroundSize: "400px 100%",
           }}
         />

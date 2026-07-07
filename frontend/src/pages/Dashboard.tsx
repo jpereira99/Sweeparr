@@ -7,11 +7,17 @@ import { fmtDate, gb } from "../lib/format";
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: endpoints.dashboard });
+  const { data, isLoading } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: endpoints.dashboard,
+  });
 
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle="the morning glance: disk, what's leaving, is everything healthy" />
+      <PageHeader
+        title="Dashboard"
+        subtitle="the morning glance: disk, what's leaving, is everything healthy"
+      />
       {isLoading || !data ? (
         <Skeleton rows={5} />
       ) : (
@@ -21,56 +27,84 @@ export function Dashboard() {
               <SectionLabel>Disk by root folder</SectionLabel>
               {data.disk_gauges.length === 0 ? (
                 <div className="text-[12px] text-ink-mid">
-                  No disk data yet — save Sonarr/Radarr in Settings to sync, or run{" "}
-                  <span className="font-mono">sync_radarr</span> /{" "}
-                  <span className="font-mono">sync_sonarr</span> from Job schedules.
+                  No disk data yet — save Sonarr/Radarr in Settings to sync, or
+                  run <span className="font-mono">sync_radarr</span> /{" "}
+                  <span className="font-mono">sync_sonarr</span> from Job
+                  schedules.
                 </div>
               ) : (
-              <div className="flex flex-col gap-2.5">
-                {data.disk_gauges.map((g: any) => (
-                  <div key={g.root}>
-                    <div className="mb-1 flex justify-between text-[11.5px]">
-                      <span className="font-mono text-ink-hi">{g.root}</span>
-                      <span className={`font-mono ${g.over_tier ? "text-state-error-ink" : "text-ink-mid"}`}>
-                        {g.used_tb} / {g.capacity_tb} TB{g.over_tier ? ` · over tier ${g.over_tier}` : ""}
-                      </span>
+                <div className="flex flex-col gap-2.5">
+                  {data.disk_gauges.map((g: any) => (
+                    <div key={g.root}>
+                      <div className="mb-1 flex justify-between text-[11.5px]">
+                        <span className="font-mono text-ink-hi">{g.root}</span>
+                        <span
+                          className={`font-mono ${g.over_tier ? "text-state-error-ink" : "text-ink-mid"}`}
+                        >
+                          {g.used_tb} / {g.capacity_tb} TB
+                          {g.over_tier ? ` · over tier ${g.over_tier}` : ""}
+                        </span>
+                      </div>
+                      <div className="relative h-2 rounded bg-bg-raised">
+                        <span
+                          className="absolute inset-y-0 left-0 rounded"
+                          style={{
+                            width: `${g.pct}%`,
+                            background: g.over_tier ? "#F76808" : "#5B8DEF",
+                          }}
+                        />
+                        <span
+                          className="absolute -bottom-1 -top-1 w-0.5 bg-state-candidate"
+                          style={{ left: `${g.warn_pct}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="relative h-2 rounded bg-bg-raised">
-                      <span
-                        className="absolute inset-y-0 left-0 rounded"
-                        style={{ width: `${g.pct}%`, background: g.over_tier ? "#F76808" : "#5B8DEF" }}
-                      />
-                      <span
-                        className="absolute -top-1 -bottom-1 w-0.5 bg-state-candidate"
-                        style={{ left: `${g.warn_pct}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
               )}
             </Card>
             <Card className="!p-3">
               <div className="mb-2 flex justify-between">
                 <SectionLabel>Bytes freed · cumulative</SectionLabel>
-                <span className="font-mono text-[12px] text-chart-2">{data.total_freed_tb} TB all-time</span>
+                <span className="font-mono text-[12px] text-chart-2">
+                  {data.total_freed_tb} TB all-time
+                </span>
               </div>
               <div className="h-16">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={data.bytes_freed_series}>
                     <defs>
                       <linearGradient id="freed" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#2FB8A6" stopOpacity={0.5} />
-                        <stop offset="100%" stopColor="#2FB8A6" stopOpacity={0.05} />
+                        <stop
+                          offset="0%"
+                          stopColor="#2FB8A6"
+                          stopOpacity={0.5}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor="#2FB8A6"
+                          stopOpacity={0.05}
+                        />
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="ts" hide />
                     <Tooltip
-                      contentStyle={{ background: "#1A2130", border: "1px solid #2A3448", borderRadius: 8, fontSize: 12 }}
+                      contentStyle={{
+                        background: "#1A2130",
+                        border: "1px solid #2A3448",
+                        borderRadius: 8,
+                        fontSize: 12,
+                      }}
                       labelFormatter={(v) => fmtDate(v as string)}
                       formatter={(v) => [gb(v as number), "freed"]}
                     />
-                    <Area type="monotone" dataKey="cumulative_gb" stroke="#2FB8A6" fill="url(#freed)" strokeWidth={2} />
+                    <Area
+                      type="monotone"
+                      dataKey="cumulative_gb"
+                      stroke="#2FB8A6"
+                      fill="url(#freed)"
+                      strokeWidth={2}
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -80,10 +114,13 @@ export function Dashboard() {
           <div className="flex flex-col gap-3">
             <Card className="!p-3">
               <SectionLabel>
-                Leaving this week · {data.leaving_week.length} items · {gb(data.leaving_week_gb)}
+                Leaving this week · {data.leaving_week.length} items ·{" "}
+                {gb(data.leaving_week_gb)}
               </SectionLabel>
               {data.leaving_week.length === 0 ? (
-                <div className="text-[12px] text-ink-mid">Nothing leaves in the next 7 days.</div>
+                <div className="text-[12px] text-ink-mid">
+                  Nothing leaves in the next 7 days.
+                </div>
               ) : (
                 <div className="flex gap-2 overflow-x-auto">
                   {data.leaving_week.slice(0, 6).map((u: any) => {
@@ -125,9 +162,13 @@ export function Dashboard() {
                       {!i.configured ? (
                         <span className="text-ink-low">◦ not set</span>
                       ) : i.ok ? (
-                        <span className="text-state-kept-ink">● {i.latency_ms}ms</span>
+                        <span className="text-state-kept-ink">
+                          ● {i.latency_ms}ms
+                        </span>
                       ) : (
-                        <span className="animate-swp-pulse text-state-error-ink">▲ {i.detail}</span>
+                        <span className="animate-swp-pulse text-state-error-ink">
+                          ▲ {i.detail}
+                        </span>
                       )}
                     </div>
                   ))}
@@ -139,7 +180,13 @@ export function Dashboard() {
                   {data.recent_jobs.slice(0, 4).map((j: any, idx: number) => (
                     <div key={idx}>
                       {j.job}{" "}
-                      <span className={j.status === "ok" ? "text-state-kept-ink" : "text-state-error-ink"}>
+                      <span
+                        className={
+                          j.status === "ok"
+                            ? "text-state-kept-ink"
+                            : "text-state-error-ink"
+                        }
+                      >
                         {j.status === "ok" ? "✓" : "▲"}
                       </span>
                     </div>
@@ -154,11 +201,19 @@ export function Dashboard() {
   );
 }
 
-export function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+export function PageHeader({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle?: string;
+}) {
   return (
     <div className="mb-6">
       <h1 className="text-display">{title}</h1>
-      {subtitle && <p className="mt-1 text-[13.5px] text-ink-mid">{subtitle}</p>}
+      {subtitle && (
+        <p className="mt-1 text-[13.5px] text-ink-mid">{subtitle}</p>
+      )}
     </div>
   );
 }

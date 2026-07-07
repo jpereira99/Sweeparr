@@ -1,4 +1,5 @@
 """Radarr adapter (§3, §7.3)."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -18,7 +19,9 @@ class RadarrAdapter(IntegrationAdapter):
     async def get_diskspace(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/api/v3/diskspace") or []
 
-    async def delete_movie(self, movie_id: int, *, add_import_list_exclusion: bool = True) -> None:
+    async def delete_movie(
+        self, movie_id: int, *, add_import_list_exclusion: bool = True
+    ) -> None:
         # Radarr respects its own recycle-bin settings on this call.
         await self._request(
             "DELETE",

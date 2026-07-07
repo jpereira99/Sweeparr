@@ -4,6 +4,7 @@ Upsert + tombstone: items that vanish from a service get ``deleted_externally``
 rather than a row delete, so history/stats survive. Adapters degrade gracefully
 — an unconfigured or unreachable service skips rather than crashing the job.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -24,8 +25,8 @@ from ..models import (
 from .integrations import get_integrations
 from .runtime import set_setting
 
-GB = 1024 ** 3
-TB = 1024 ** 4
+GB = 1024**3
+TB = 1024**4
 
 
 def _parse_dt(value: Optional[str]) -> Optional[datetime]:
@@ -37,11 +38,21 @@ def _parse_dt(value: Optional[str]) -> Optional[datetime]:
         return None
 
 
-async def _match_by_ids(session: AsyncSession, *, tmdb=None, tvdb=None, imdb=None) -> Optional[MediaItem]:
+async def _match_by_ids(
+    session: AsyncSession, *, tmdb=None, tvdb=None, imdb=None
+) -> Optional[MediaItem]:
     """Identity join in priority order (§4): provider IDs, then IMDB."""
-    for col, val in ((MediaItem.tmdb_id, tmdb), (MediaItem.tvdb_id, tvdb), (MediaItem.imdb_id, imdb)):
+    for col, val in (
+        (MediaItem.tmdb_id, tmdb),
+        (MediaItem.tvdb_id, tvdb),
+        (MediaItem.imdb_id, imdb),
+    ):
         if val:
-            row = (await session.execute(select(MediaItem).where(col == val))).scalars().first()
+            row = (
+                (await session.execute(select(MediaItem).where(col == val)))
+                .scalars()
+                .first()
+            )
             if row:
                 return row
     return None
@@ -140,10 +151,16 @@ async def sync_sonarr(session: AsyncSession) -> dict[str, Any]:
         for idx, sea in enumerate(seasons):
             num = sea["seasonNumber"]
             existing = (
-                await session.execute(
-                    select(Season).where(Season.media_item_id == item.id, Season.season_number == num)
+                (
+                    await session.execute(
+                        select(Season).where(
+                            Season.media_item_id == item.id, Season.season_number == num
+                        )
+                    )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if existing is None:
                 existing = Season(media_item_id=item.id, season_number=num)
                 session.add(existing)
@@ -208,7 +225,9 @@ def _completion_pct(ud: dict[str, Any], runtime_ticks: int | None) -> float:
     return 0.0
 
 
-def _apply_userdata(acc: _WatchAccum, jf_user_id: str, ud: dict[str, Any], runtime_ticks: int | None) -> None:
+def _apply_userdata(
+    acc: _WatchAccum, jf_user_id: str, ud: dict[str, Any], runtime_ticks: int | None
+) -> None:
     plays = int(ud.get("PlayCount") or 0)
     pos = int(ud.get("PlaybackPositionTicks") or 0)
     if plays <= 0 and pos <= 0:
@@ -227,8 +246,14 @@ def _apply_userdata(acc: _WatchAccum, jf_user_id: str, ud: dict[str, Any], runti
 
 async def _load_jellyfin_lookups(session: AsyncSession):
     media_rows = (
-        await session.execute(select(MediaItem).where(MediaItem.jellyfin_id.isnot(None)))
-    ).scalars().all()
+        (
+            await session.execute(
+                select(MediaItem).where(MediaItem.jellyfin_id.isnot(None))
+            )
+        )
+        .scalars()
+        .all()
+    )
     by_jf_id = {m.jellyfin_id: m for m in media_rows if m.jellyfin_id}
 
     season_rows = (
@@ -243,7 +268,9 @@ async def _load_jellyfin_lookups(session: AsyncSession):
     for season, media in season_rows:
         if media.jellyfin_id:
             season_by_key[(media.jellyfin_id, season.season_number)] = season
-        episode_totals[media.id] = episode_totals.get(media.id, 0) + season.episode_count
+        episode_totals[media.id] = (
+            episode_totals.get(media.id, 0) + season.episode_count
+        )
 
     return by_jf_id, season_by_key, episode_totals
 
@@ -310,7 +337,9 @@ async def _sync_jellyfin_watch_stats(session: AsyncSession, jf) -> dict[str, Any
         facts.is_favorite_any_user = acc.favorite
         total_eps = episode_totals.get(item_id, 0)
         watched_eps = len(series_watched_eps.get(item_id, set()))
-        facts.pct_episodes_watched = round(watched_eps / total_eps * 100, 1) if total_eps else 0.0
+        facts.pct_episodes_watched = (
+            round(watched_eps / total_eps * 100, 1) if total_eps else 0.0
+        )
 
     for season_id, acc in season_acc.items():
         sf = await session.get(SeasonWatchFacts, season_id)
@@ -323,9 +352,15 @@ async def _sync_jellyfin_watch_stats(session: AsyncSession, jf) -> dict[str, Any
         season = await session.get(Season, season_id)
         ep_count = season.episode_count if season else 0
         watched_eps = len(season_watched_eps.get(season_id, set()))
-        sf.pct_season_watched = round(watched_eps / ep_count * 100, 1) if ep_count else 0.0
+        sf.pct_season_watched = (
+            round(watched_eps / ep_count * 100, 1) if ep_count else 0.0
+        )
 
-    return {"watch_items": len(item_acc), "watch_seasons": len(season_acc), "jf_users": len(users)}
+    return {
+        "watch_items": len(item_acc),
+        "watch_seasons": len(season_acc),
+        "jf_users": len(users),
+    }
 
 
 async def sync_jellyseerr(session: AsyncSession) -> dict[str, Any]:
@@ -362,9 +397,13 @@ async def aggregate_playback(session: AsyncSession) -> dict[str, Any]:
         ended = [r.ended_at for r in rows if r.ended_at]
         facts.total_plays = len(rows)
         facts.distinct_watchers = len({r.user_id for r in rows if r.user_id})
-        facts.max_completion_pct = max((r.max_position_pct for r in rows), default=facts.max_completion_pct)
+        facts.max_completion_pct = max(
+            (r.max_position_pct for r in rows), default=facts.max_completion_pct
+        )
         latest = max(ended, default=None)
-        if latest and (facts.last_watched_at is None or latest > _aware(facts.last_watched_at)):
+        if latest and (
+            facts.last_watched_at is None or latest > _aware(facts.last_watched_at)
+        ):
             facts.last_watched_at = latest
 
     for season_id, rows in by_season.items():
@@ -376,7 +415,9 @@ async def aggregate_playback(session: AsyncSession) -> dict[str, Any]:
         sf.distinct_watchers = len({r.user_id for r in rows if r.user_id})
         ended = [r.ended_at for r in rows if r.ended_at]
         latest = max(ended, default=None)
-        if latest and (sf.last_watched_at is None or latest > _aware(sf.last_watched_at)):
+        if latest and (
+            sf.last_watched_at is None or latest > _aware(sf.last_watched_at)
+        ):
             sf.last_watched_at = latest
 
     await session.commit()

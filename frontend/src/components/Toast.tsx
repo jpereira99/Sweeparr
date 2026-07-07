@@ -1,7 +1,15 @@
-import { createContext, useCallback, useContext, useState, ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  ReactNode,
+} from "react";
 
 type Toast = { id: number; message: string; undo?: () => void };
-const ToastCtx = createContext<(message: string, undo?: () => void) => void>(() => {});
+const ToastCtx = createContext<(message: string, undo?: () => void) => void>(
+  () => {},
+);
 
 export function useToast() {
   return useContext(ToastCtx);

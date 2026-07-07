@@ -3,6 +3,7 @@
 Rules are created disabled. Live preview evaluates against the catalog with no
 side effects. Enabling a rule schedules matching units for real deletion.
 """
+
 from __future__ import annotations
 
 from datetime import timezone
@@ -12,7 +13,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_session
-from ..models import LifecycleState, MediaItem, RuleMatchHistory, RuleSet, RuleTarget, Season
+from ..models import (
+    LifecycleState,
+    MediaItem,
+    RuleMatchHistory,
+    RuleSet,
+    RuleTarget,
+    Season,
+)
 from ..rules.engine import FIELD_CATALOG, OPERATORS_BY_TYPE, count_condition_matches
 from ..schemas import PreviewIn, RuleIn
 from ..services import lifecycle
@@ -21,7 +29,7 @@ from .auth import Principal, require_admin
 
 router = APIRouter(prefix="/api/v1", tags=["rules"])
 
-GB = 1024 ** 3
+GB = 1024**3
 
 
 def _serialize_rule(r: RuleSet, match_count=None, match_gb=None) -> dict:
@@ -38,7 +46,11 @@ def _serialize_rule(r: RuleSet, match_count=None, match_gb=None) -> dict:
         "notify_admin": r.notify_admin,
         "mirror_arr_tags": r.mirror_arr_tags,
         "add_import_list_exclusion": r.add_import_list_exclusion,
-        "updated_at": r.updated_at.replace(tzinfo=timezone.utc).isoformat() if r.updated_at else None,
+        "updated_at": (
+            r.updated_at.replace(tzinfo=timezone.utc).isoformat()
+            if r.updated_at
+            else None
+        ),
         "match_count": match_count,
         "match_gb": match_gb,
     }
@@ -48,13 +60,17 @@ async def _revert_rule_units(session: AsyncSession, rule_id: int) -> int:
     reverted = 0
     for model in (MediaItem, Season):
         rows = (
-            await session.execute(
-                select(model).where(
-                    model.matched_rule_id == rule_id,
-                    model.state == LifecycleState.SCHEDULED.value,
+            (
+                await session.execute(
+                    select(model).where(
+                        model.matched_rule_id == rule_id,
+                        model.state == LifecycleState.SCHEDULED.value,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for obj in rows:
             obj.state = LifecycleState.ACTIVE.value
             obj.delete_at = None
@@ -70,8 +86,14 @@ async def catalog(_: Principal = Depends(require_admin)):
 
 
 @router.get("/rules")
-async def list_rules(session: AsyncSession = Depends(get_session), _: Principal = Depends(require_admin)):
-    rules = (await session.execute(select(RuleSet).order_by(RuleSet.sort_order))).scalars().all()
+async def list_rules(
+    session: AsyncSession = Depends(get_session), _: Principal = Depends(require_admin)
+):
+    rules = (
+        (await session.execute(select(RuleSet).order_by(RuleSet.sort_order)))
+        .scalars()
+        .all()
+    )
     out = []
     for r in rules:
         result = await lifecycle.evaluate_rule(session, r)
@@ -82,7 +104,11 @@ async def list_rules(session: AsyncSession = Depends(get_session), _: Principal 
 
 
 @router.get("/rules/{rule_id}")
-async def get_rule(rule_id: int, session: AsyncSession = Depends(get_session), _: Principal = Depends(require_admin)):
+async def get_rule(
+    rule_id: int,
+    session: AsyncSession = Depends(get_session),
+    _: Principal = Depends(require_admin),
+):
     r = await session.get(RuleSet, rule_id)
     if not r:
         raise HTTPException(404, "Rule not found")
@@ -93,7 +119,11 @@ async def get_rule(rule_id: int, session: AsyncSession = Depends(get_session), _
 
 
 @router.post("/rules")
-async def create_rule(body: RuleIn, session: AsyncSession = Depends(get_session), _: Principal = Depends(require_admin)):
+async def create_rule(
+    body: RuleIn,
+    session: AsyncSession = Depends(get_session),
+    _: Principal = Depends(require_admin),
+):
     r = RuleSet(
         name=body.name,
         library=body.library,
@@ -113,7 +143,12 @@ async def create_rule(body: RuleIn, session: AsyncSession = Depends(get_session)
 
 
 @router.put("/rules/{rule_id}")
-async def update_rule(rule_id: int, body: RuleIn, session: AsyncSession = Depends(get_session), _: Principal = Depends(require_admin)):
+async def update_rule(
+    rule_id: int,
+    body: RuleIn,
+    session: AsyncSession = Depends(get_session),
+    _: Principal = Depends(require_admin),
+):
     r = await session.get(RuleSet, rule_id)
     if not r:
         raise HTTPException(404, "Rule not found")
@@ -132,7 +167,11 @@ async def update_rule(rule_id: int, body: RuleIn, session: AsyncSession = Depend
 
 
 @router.delete("/rules/{rule_id}")
-async def delete_rule(rule_id: int, session: AsyncSession = Depends(get_session), _: Principal = Depends(require_admin)):
+async def delete_rule(
+    rule_id: int,
+    session: AsyncSession = Depends(get_session),
+    _: Principal = Depends(require_admin),
+):
     r = await session.get(RuleSet, rule_id)
     if not r:
         raise HTTPException(404, "Rule not found")
@@ -144,25 +183,42 @@ async def delete_rule(rule_id: int, session: AsyncSession = Depends(get_session)
 
 
 @router.post("/rules/preview")
-async def preview(body: PreviewIn, session: AsyncSession = Depends(get_session), _: Principal = Depends(require_admin)):
+async def preview(
+    body: PreviewIn,
+    session: AsyncSession = Depends(get_session),
+    _: Principal = Depends(require_admin),
+):
     """Evaluate an (even unsaved) condition tree → matching units, no side effects."""
-    ephemeral = RuleSet(name="__preview__", library=body.library, target=body.target, conditions=body.conditions)
+    ephemeral = RuleSet(
+        name="__preview__",
+        library=body.library,
+        target=body.target,
+        conditions=body.conditions,
+    )
     result = await lifecycle.evaluate_rule(session, ephemeral)
     matches = [m for m in result["matches"] if not m["protected"]]
 
     fact_rows = [m["facts"] for m in result["matches"]]
-    per_condition = count_condition_matches(body.conditions, fact_rows) if body.conditions else {}
+    per_condition = (
+        count_condition_matches(body.conditions, fact_rows) if body.conditions else {}
+    )
 
     items = []
     for m in matches:
         u = m["unit"]
-        items.append({
-            "key": u.key,
-            "title": u.item.title,
-            "season_number": getattr(u.obj, "season_number", None) if u.type == "season" else None,
-            "size_gb": round(u.size_bytes / GB, 1),
-            "snapshot": m["snapshot"],
-        })
+        items.append(
+            {
+                "key": u.key,
+                "title": u.item.title,
+                "season_number": (
+                    getattr(u.obj, "season_number", None)
+                    if u.type == "season"
+                    else None
+                ),
+                "size_gb": round(u.size_bytes / GB, 1),
+                "snapshot": m["snapshot"],
+            }
+        )
     items.sort(key=lambda x: x["size_gb"], reverse=True)
     total_gb = round(sum(i["size_gb"] for i in items), 1)
     return {
@@ -174,7 +230,11 @@ async def preview(body: PreviewIn, session: AsyncSession = Depends(get_session),
 
 
 @router.post("/rules/{rule_id}/enable")
-async def enable_rule(rule_id: int, session: AsyncSession = Depends(get_session), _: Principal = Depends(require_admin)):
+async def enable_rule(
+    rule_id: int,
+    session: AsyncSession = Depends(get_session),
+    _: Principal = Depends(require_admin),
+):
     r = await session.get(RuleSet, rule_id)
     if not r:
         raise HTTPException(404, "Rule not found")
@@ -186,7 +246,11 @@ async def enable_rule(rule_id: int, session: AsyncSession = Depends(get_session)
 
 
 @router.post("/rules/{rule_id}/disable")
-async def disable_rule(rule_id: int, session: AsyncSession = Depends(get_session), _: Principal = Depends(require_admin)):
+async def disable_rule(
+    rule_id: int,
+    session: AsyncSession = Depends(get_session),
+    _: Principal = Depends(require_admin),
+):
     r = await session.get(RuleSet, rule_id)
     if not r:
         raise HTTPException(404, "Rule not found")
@@ -198,17 +262,30 @@ async def disable_rule(rule_id: int, session: AsyncSession = Depends(get_session
 
 
 @router.get("/rules/{rule_id}/qc")
-async def qc(rule_id: int, session: AsyncSession = Depends(get_session), _: Principal = Depends(require_admin)):
+async def qc(
+    rule_id: int,
+    session: AsyncSession = Depends(get_session),
+    _: Principal = Depends(require_admin),
+):
     r = await session.get(RuleSet, rule_id)
     if not r:
         raise HTTPException(404, "Rule not found")
 
     history = (
-        await session.execute(
-            select(RuleMatchHistory).where(RuleMatchHistory.rule_id == rule_id).order_by(RuleMatchHistory.ts)
+        (
+            await session.execute(
+                select(RuleMatchHistory)
+                .where(RuleMatchHistory.rule_id == rule_id)
+                .order_by(RuleMatchHistory.ts)
+            )
         )
-    ).scalars().all()
-    sparkline = [{"ts": h.ts.replace(tzinfo=timezone.utc).isoformat(), "count": h.match_count} for h in history]
+        .scalars()
+        .all()
+    )
+    sparkline = [
+        {"ts": h.ts.replace(tzinfo=timezone.utc).isoformat(), "count": h.match_count}
+        for h in history
+    ]
 
     diff = {"added": [], "removed": []}
     if len(history) >= 2:
@@ -221,18 +298,24 @@ async def qc(rule_id: int, session: AsyncSession = Depends(get_session), _: Prin
     matches = []
     for m in result["matches"]:
         u = m["unit"]
-        matches.append({
-            "key": u.key,
-            "unit_type": u.type,
-            "unit_id": u.id,
-            "title": u.item.title,
-            "season_number": getattr(u.obj, "season_number", None) if u.type == "season" else None,
-            "size_gb": round(u.size_bytes / GB, 1),
-            "snapshot": m["snapshot"],
-            "protected": m["protected"],
-            "protections": m["protections"],
-            "state": u.obj.state,
-        })
+        matches.append(
+            {
+                "key": u.key,
+                "unit_type": u.type,
+                "unit_id": u.id,
+                "title": u.item.title,
+                "season_number": (
+                    getattr(u.obj, "season_number", None)
+                    if u.type == "season"
+                    else None
+                ),
+                "size_gb": round(u.size_bytes / GB, 1),
+                "snapshot": m["snapshot"],
+                "protected": m["protected"],
+                "protections": m["protections"],
+                "state": u.obj.state,
+            }
+        )
     return {
         "rule": _serialize_rule(r),
         "sparkline": sparkline,

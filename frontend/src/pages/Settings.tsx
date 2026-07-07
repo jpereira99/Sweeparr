@@ -5,16 +5,27 @@ import { PageHeader } from "./Dashboard";
 import { Card, SectionLabel, Button, Toggle, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
 
-const SERVICES = ["jellyfin", "jellyseerr", "sonarr", "radarr", "ntfy"] as const;
+const SERVICES = [
+  "jellyfin",
+  "jellyseerr",
+  "sonarr",
+  "radarr",
+  "ntfy",
+] as const;
 
 export function Settings() {
   const qc = useQueryClient();
   const toast = useToast();
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: endpoints.me });
-  const { data, isLoading } = useQuery({ queryKey: ["settings"], queryFn: endpoints.settings });
+  const { data, isLoading } = useQuery({
+    queryKey: ["settings"],
+    queryFn: endpoints.settings,
+  });
   const [testing, setTesting] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, any>>({});
-  const [drafts, setDrafts] = useState<Record<string, { url: string; api_key: string; topic?: string }>>({});
+  const [drafts, setDrafts] = useState<
+    Record<string, { url: string; api_key: string; topic?: string }>
+  >({});
   const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
 
   async function test(svc: string) {
@@ -31,17 +42,27 @@ export function Settings() {
     const d = drafts[svc] ?? {};
     const patch: any = { url: d.url ?? data?.connections?.[svc]?.url ?? "" };
     if (d.api_key) patch.api_key = d.api_key;
-    if (svc === "ntfy") patch.topic = d.topic ?? data?.connections?.ntfy?.topic ?? "";
-    const updated = await endpoints.updateSettings({ integrations: { [svc]: patch } });
-    const h = (updated.integration_health ?? []).find((x: any) => x.name === svc);
-    if (h) setResults((s) => ({ ...s, [svc]: { ok: h.ok, detail: h.detail, latency_ms: h.latency_ms } }));
+    if (svc === "ntfy")
+      patch.topic = d.topic ?? data?.connections?.ntfy?.topic ?? "";
+    const updated = await endpoints.updateSettings({
+      integrations: { [svc]: patch },
+    });
+    const h = (updated.integration_health ?? []).find(
+      (x: any) => x.name === svc,
+    );
+    if (h)
+      setResults((s) => ({
+        ...s,
+        [svc]: { ok: h.ok, detail: h.detail, latency_ms: h.latency_ms },
+      }));
     setDrafts((s) => {
       const next = { ...s };
       delete next[svc];
       return next;
     });
     const sync = updated.sync_summary;
-    const upserted = (sync?.sync_radarr?.upserted ?? 0) + (sync?.sync_sonarr?.upserted ?? 0);
+    const upserted =
+      (sync?.sync_radarr?.upserted ?? 0) + (sync?.sync_sonarr?.upserted ?? 0);
     toast(
       upserted
         ? `Saved ${svc} — synced ${upserted} items from library`
@@ -73,16 +94,21 @@ export function Settings() {
 
   function draftFor(svc: string) {
     const conn = data.connections[svc] ?? {};
-    return drafts[svc] ?? {
-      url: conn.url ?? "",
-      api_key: "",
-      topic: conn.topic ?? "",
-    };
+    return (
+      drafts[svc] ?? {
+        url: conn.url ?? "",
+        api_key: "",
+        topic: conn.topic ?? "",
+      }
+    );
   }
 
   return (
     <div>
-      <PageHeader title="Settings" subtitle="connections, system control, and account" />
+      <PageHeader
+        title="Settings"
+        subtitle="connections, system control, and account"
+      />
       <div className="grid grid-cols-[1.2fr_0.8fr] gap-4">
         <Card>
           <SectionLabel>Connections</SectionLabel>
@@ -93,49 +119,89 @@ export function Settings() {
               const h = health[svc] || {};
               const r = results[svc];
               return (
-                <div key={svc} className="rounded border border-line-subtle bg-bg-inset p-3">
+                <div
+                  key={svc}
+                  className="rounded border border-line-subtle bg-bg-inset p-3"
+                >
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[12px] font-medium capitalize text-ink-hi">{svc}</span>
+                    <span className="text-[12px] font-medium capitalize text-ink-hi">
+                      {svc}
+                    </span>
                     <div className="flex gap-2">
-                      <Button size="sm" disabled={testing === svc} onClick={() => test(svc)}>
+                      <Button
+                        size="sm"
+                        disabled={testing === svc}
+                        onClick={() => test(svc)}
+                      >
                         {testing === svc ? "Testing…" : "Test"}
                       </Button>
-                      <Button size="sm" variant="primary" onClick={() => saveIntegration(svc)}>Save</Button>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => saveIntegration(svc)}
+                      >
+                        Save
+                      </Button>
                     </div>
                   </div>
-                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-low">URL</label>
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-low">
+                    URL
+                  </label>
                   <input
                     value={d.url}
-                    onChange={(e) => setDrafts((s) => ({ ...s, [svc]: { ...draftFor(svc), url: e.target.value } }))}
+                    onChange={(e) =>
+                      setDrafts((s) => ({
+                        ...s,
+                        [svc]: { ...draftFor(svc), url: e.target.value },
+                      }))
+                    }
                     className="mb-2 h-8 w-full rounded border border-line bg-bg px-2 font-mono text-[11px] text-ink-hi outline-none focus:border-accent"
                     placeholder={`https://${svc}.example.com`}
                   />
                   {svc !== "ntfy" ? (
                     <>
                       <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-low">
-                        API key {c.has_key ? "(leave blank to keep current)" : ""}
+                        API key{" "}
+                        {c.has_key ? "(leave blank to keep current)" : ""}
                       </label>
                       <input
                         type="password"
                         value={d.api_key}
-                        onChange={(e) => setDrafts((s) => ({ ...s, [svc]: { ...draftFor(svc), api_key: e.target.value } }))}
+                        onChange={(e) =>
+                          setDrafts((s) => ({
+                            ...s,
+                            [svc]: {
+                              ...draftFor(svc),
+                              api_key: e.target.value,
+                            },
+                          }))
+                        }
                         className="mb-1 h-8 w-full rounded border border-line bg-bg px-2 font-mono text-[11px] text-ink-hi outline-none focus:border-accent"
                         placeholder={c.has_key ? "••••••••" : "API key"}
                       />
                     </>
                   ) : (
                     <>
-                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-low">Topic</label>
+                      <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-low">
+                        Topic
+                      </label>
                       <input
                         value={d.topic ?? ""}
-                        onChange={(e) => setDrafts((s) => ({ ...s, [svc]: { ...draftFor(svc), topic: e.target.value } }))}
+                        onChange={(e) =>
+                          setDrafts((s) => ({
+                            ...s,
+                            [svc]: { ...draftFor(svc), topic: e.target.value },
+                          }))
+                        }
                         className="mb-1 h-8 w-full rounded border border-line bg-bg px-2 font-mono text-[11px] text-ink-hi outline-none focus:border-accent"
                         placeholder="sweeparr"
                       />
                     </>
                   )}
                   {(r || h.configured || c.has_key || c.url) && (
-                    <div className={`mt-1 font-mono text-[10.5px] ${(r?.ok ?? h.ok) ? "text-state-kept-ink" : "text-state-error-ink"}`}>
+                    <div
+                      className={`mt-1 font-mono text-[10.5px] ${(r?.ok ?? h.ok) ? "text-state-kept-ink" : "text-state-error-ink"}`}
+                    >
                       {(r?.ok ?? h.ok)
                         ? `● ${r?.latency_ms ?? h.latency_ms ?? ""}ms`
                         : `▲ ${r?.detail ?? h.detail ?? (c.url || c.has_key ? "connection failed" : "not configured")}`}
@@ -149,10 +215,14 @@ export function Settings() {
 
         <div className="flex flex-col gap-4">
           <Card className="border-[rgba(91,141,239,0.35)]">
-            <div className="mb-3 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-accent-hover">System</div>
+            <div className="mb-3 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-accent-hover">
+              System
+            </div>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-[12px] font-medium text-ink-hi">{data.system_enabled ? "Running" : "Paused"}</div>
+                <div className="text-[12px] font-medium text-ink-hi">
+                  {data.system_enabled ? "Running" : "Paused"}
+                </div>
                 <p className="mt-1 text-[11px] leading-relaxed text-ink-low">
                   When paused, no rules evaluate and nothing deletes.
                 </p>
@@ -169,36 +239,50 @@ export function Settings() {
                   type="password"
                   placeholder="Current password"
                   value={pw.current}
-                  onChange={(e) => setPw((p) => ({ ...p, current: e.target.value }))}
+                  onChange={(e) =>
+                    setPw((p) => ({ ...p, current: e.target.value }))
+                  }
                   className="h-8 rounded border border-line bg-bg px-2 text-[12px] text-ink-hi outline-none focus:border-accent"
                 />
                 <input
                   type="password"
                   placeholder="New password (min 8 chars)"
                   value={pw.next}
-                  onChange={(e) => setPw((p) => ({ ...p, next: e.target.value }))}
+                  onChange={(e) =>
+                    setPw((p) => ({ ...p, next: e.target.value }))
+                  }
                   className="h-8 rounded border border-line bg-bg px-2 text-[12px] text-ink-hi outline-none focus:border-accent"
                 />
                 <input
                   type="password"
                   placeholder="Confirm new password"
                   value={pw.confirm}
-                  onChange={(e) => setPw((p) => ({ ...p, confirm: e.target.value }))}
+                  onChange={(e) =>
+                    setPw((p) => ({ ...p, confirm: e.target.value }))
+                  }
                   className="h-8 rounded border border-line bg-bg px-2 text-[12px] text-ink-hi outline-none focus:border-accent"
                 />
-                <Button size="sm" onClick={changePassword}>Change password</Button>
+                <Button size="sm" onClick={changePassword}>
+                  Change password
+                </Button>
               </div>
             </Card>
           )}
 
-          <Card className="!p-0 overflow-hidden">
+          <Card className="overflow-hidden !p-0">
             <div className="border-b border-line-subtle px-5 py-4">
               <SectionLabel>Job schedules</SectionLabel>
             </div>
             <div className="grid grid-cols-[minmax(0,1fr)_88px_56px] items-center gap-x-3 border-b border-line-subtle bg-bg-raised px-5 py-2">
-              <span className="text-[10px] font-semibold tracking-[0.08em] text-ink-low">JOB</span>
-              <span className="text-[10px] font-semibold tracking-[0.08em] text-ink-low">NEXT RUN</span>
-              <span className="text-right text-[10px] font-semibold tracking-[0.08em] text-ink-low">RUN</span>
+              <span className="text-[10px] font-semibold tracking-[0.08em] text-ink-low">
+                JOB
+              </span>
+              <span className="text-[10px] font-semibold tracking-[0.08em] text-ink-low">
+                NEXT RUN
+              </span>
+              <span className="text-right text-[10px] font-semibold tracking-[0.08em] text-ink-low">
+                RUN
+              </span>
             </div>
             <div className="divide-y divide-line-subtle">
               {(data.jobs ?? []).map((j: any) => (
@@ -211,7 +295,10 @@ export function Settings() {
                     {j.paused
                       ? "paused"
                       : j.next_run
-                        ? new Date(j.next_run).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                        ? new Date(j.next_run).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
                         : "—"}
                   </span>
                   <div className="flex justify-end">
@@ -236,11 +323,14 @@ export function Settings() {
       <Card className="mt-4">
         <SectionLabel>Jellyfin inject script (§8.2)</SectionLabel>
         <p className="mb-2 text-[12px] leading-relaxed text-ink-mid">
-          Load the versioned pill/banner script into your Jellyfin web client. It fetches only public-safe fields from the cached{" "}
-          <span className="font-mono">/flags</span> endpoint and fails silently on any DOM change.
+          Load the versioned pill/banner script into your Jellyfin web client.
+          It fetches only public-safe fields from the cached{" "}
+          <span className="font-mono">/flags</span> endpoint and fails silently
+          on any DOM change.
         </p>
         <code className="block rounded border border-line-subtle bg-bg-inset px-3 py-2 font-mono text-[11.5px] text-ink-hi">
-          &lt;script src="{`{sweeparr}`}/static/inject/sweeparr.js"&gt;&lt;/script&gt;
+          &lt;script src="{`{sweeparr}`}
+          /static/inject/sweeparr.js"&gt;&lt;/script&gt;
         </code>
       </Card>
     </div>

@@ -4,6 +4,7 @@ The polymorphic "deletable unit" (movie | season) carries the lifecycle
 columns. For movies those columns live on ``MediaItem``; for TV they live on
 ``Season``. Everything references ``media_item.id``, never a service-specific id.
 """
+
 from __future__ import annotations
 
 import enum
@@ -69,7 +70,9 @@ class MediaItem(Base):
     tmdb_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     tvdb_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     imdb_id: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)
-    jellyfin_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    jellyfin_id: Mapped[str | None] = mapped_column(
+        String(64), index=True, nullable=True
+    )
     sonarr_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     radarr_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
@@ -85,21 +88,35 @@ class MediaItem(Base):
     date_created_jf: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     monitored: Mapped[bool] = mapped_column(Boolean, default=True)
-    series_status: Mapped[str | None] = mapped_column(String(32), nullable=True)  # ended|continuing
+    series_status: Mapped[str | None] = mapped_column(
+        String(32), nullable=True
+    )  # ended|continuing
     unmanaged: Mapped[bool] = mapped_column(Boolean, default=False)
     deleted_externally: Mapped[bool] = mapped_column(Boolean, default=False)
-    match_confidence: Mapped[str] = mapped_column(String(16), default="high")  # high|low_confidence
+    match_confidence: Mapped[str] = mapped_column(
+        String(16), default="high"
+    )  # high|low_confidence
 
     # Lifecycle columns — used for MOVIES (seasons carry their own).
-    state: Mapped[str] = mapped_column(String(16), default=LifecycleState.ACTIVE.value, index=True)
+    state: Mapped[str] = mapped_column(
+        String(16), default=LifecycleState.ACTIVE.value, index=True
+    )
     delete_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    matched_rule_id: Mapped[int | None] = mapped_column(ForeignKey("rule_set.id"), nullable=True)
+    matched_rule_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rule_set.id"), nullable=True
+    )
     match_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, onupdate=utcnow
+    )
 
-    seasons: Mapped[list["Season"]] = relationship(back_populates="media_item", cascade="all, delete-orphan")
-    facts: Mapped["ItemWatchFacts | None"] = relationship(back_populates="media_item", uselist=False, cascade="all, delete-orphan")
+    seasons: Mapped[list["Season"]] = relationship(
+        back_populates="media_item", cascade="all, delete-orphan"
+    )
+    facts: Mapped["ItemWatchFacts | None"] = relationship(
+        back_populates="media_item", uselist=False, cascade="all, delete-orphan"
+    )
 
     __table_args__ = (Index("ix_media_state_delete", "state", "delete_at"),)
 
@@ -118,13 +135,19 @@ class Season(Base):
     is_latest_season: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Lifecycle columns for the season deletable unit.
-    state: Mapped[str] = mapped_column(String(16), default=LifecycleState.ACTIVE.value, index=True)
+    state: Mapped[str] = mapped_column(
+        String(16), default=LifecycleState.ACTIVE.value, index=True
+    )
     delete_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    matched_rule_id: Mapped[int | None] = mapped_column(ForeignKey("rule_set.id"), nullable=True)
+    matched_rule_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rule_set.id"), nullable=True
+    )
     match_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     media_item: Mapped[MediaItem] = relationship(back_populates="seasons")
-    facts: Mapped["SeasonWatchFacts | None"] = relationship(back_populates="season", uselist=False, cascade="all, delete-orphan")
+    facts: Mapped["SeasonWatchFacts | None"] = relationship(
+        back_populates="season", uselist=False, cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         UniqueConstraint("media_item_id", "season_number", name="uq_season"),
@@ -157,7 +180,9 @@ class ArrTag(Base):
 class User(Base):
     __tablename__ = "user"
     id: Mapped[int] = mapped_column(primary_key=True)
-    jellyfin_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    jellyfin_id: Mapped[str | None] = mapped_column(
+        String(64), index=True, nullable=True
+    )
     jellyseerr_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     name: Mapped[str] = mapped_column(String(128))
     email: Mapped[str | None] = mapped_column(String(256), nullable=True)
@@ -169,9 +194,13 @@ class User(Base):
 class Request(Base):
     __tablename__ = "request"
     id: Mapped[int] = mapped_column(primary_key=True)
-    media_item_id: Mapped[int | None] = mapped_column(ForeignKey("media_item.id"), index=True, nullable=True)
+    media_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("media_item.id"), index=True, nullable=True
+    )
     jellyseerr_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    requester_user_id: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True)
+    requester_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id"), nullable=True
+    )
     season_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="available")
@@ -185,7 +214,9 @@ class PlaybackEvent(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     raw: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True)
-    jellyfin_item_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    jellyfin_item_id: Mapped[str | None] = mapped_column(
+        String(64), index=True, nullable=True
+    )
     kind: Mapped[str] = mapped_column(String(32))  # PlaybackStart|Progress|Stop
     position_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     ts: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
@@ -195,18 +226,27 @@ class PlaybackSession(Base):
     __tablename__ = "playback_session"
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True)
-    media_item_id: Mapped[int | None] = mapped_column(ForeignKey("media_item.id"), index=True, nullable=True)
-    season_id: Mapped[int | None] = mapped_column(ForeignKey("season.id"), index=True, nullable=True)
+    media_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("media_item.id"), index=True, nullable=True
+    )
+    season_id: Mapped[int | None] = mapped_column(
+        ForeignKey("season.id"), index=True, nullable=True
+    )
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    ended_at: Mapped[datetime | None] = mapped_column(DateTime, index=True, nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(
+        DateTime, index=True, nullable=True
+    )
     seconds_watched: Mapped[int] = mapped_column(Integer, default=0)
     max_position_pct: Mapped[float] = mapped_column(Float, default=0.0)
 
 
 class ItemWatchFacts(Base):
     """Materialized per-item facts consumed by the rule engine."""
+
     __tablename__ = "item_watch_facts"
-    media_item_id: Mapped[int] = mapped_column(ForeignKey("media_item.id"), primary_key=True)
+    media_item_id: Mapped[int] = mapped_column(
+        ForeignKey("media_item.id"), primary_key=True
+    )
     last_watched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     total_plays: Mapped[int] = mapped_column(Integer, default=0)
     distinct_watchers: Mapped[int] = mapped_column(Integer, default=0)
@@ -251,11 +291,14 @@ class RuleSet(Base):
     add_import_list_exclusion: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, onupdate=utcnow
+    )
 
 
 class RuleMatchHistory(Base):
     """Daily match-count snapshots powering the QC sparkline + diff."""
+
     __tablename__ = "rule_match_history"
     id: Mapped[int] = mapped_column(primary_key=True)
     rule_id: Mapped[int] = mapped_column(ForeignKey("rule_set.id"), index=True)
@@ -271,7 +314,9 @@ class KeepRequest(Base):
     unit_id: Mapped[int] = mapped_column(Integer, index=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending|approved|denied
+    status: Mapped[str] = mapped_column(
+        String(16), default="pending"
+    )  # pending|approved|denied
     token: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     decided_by: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True)
@@ -285,7 +330,9 @@ class Protection(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     unit_type: Mapped[str] = mapped_column(String(16))
     unit_id: Mapped[int] = mapped_column(Integer, index=True)
-    kind: Mapped[str] = mapped_column(String(32))  # tag|favorite|keep|request_window|airing|unmanaged
+    kind: Mapped[str] = mapped_column(
+        String(32)
+    )  # tag|favorite|keep|request_window|airing|unmanaged
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -294,7 +341,9 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
     id: Mapped[int] = mapped_column(primary_key=True)
     ts: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
-    media_item_id: Mapped[int | None] = mapped_column(ForeignKey("media_item.id"), nullable=True)
+    media_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("media_item.id"), nullable=True
+    )
     unit_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     unit_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     actor: Mapped[str] = mapped_column(String(64), default="system")
@@ -308,7 +357,9 @@ class JobRun(Base):
     job_name: Mapped[str] = mapped_column(String(64), index=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    status: Mapped[str] = mapped_column(String(16), default="running")  # running|ok|error
+    status: Mapped[str] = mapped_column(
+        String(16), default="running"
+    )  # running|ok|error
     summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
@@ -320,7 +371,9 @@ class Notification(Base):
     target: Mapped[str | None] = mapped_column(String(256), nullable=True)
     subject: Mapped[str] = mapped_column(String(256))
     status: Mapped[str] = mapped_column(String(16), default="sent")
-    media_item_id: Mapped[int | None] = mapped_column(ForeignKey("media_item.id"), nullable=True)
+    media_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("media_item.id"), nullable=True
+    )
 
 
 class Setting(Base):

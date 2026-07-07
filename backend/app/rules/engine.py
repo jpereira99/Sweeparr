@@ -11,6 +11,7 @@ A condition tree is a JSON-serialisable boolean tree::
         {"op": "OR", "conditions": [...]},
     ]}
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -21,39 +22,169 @@ from typing import Any
 # type: number | bool | string | tag ; applies: which unit kinds can use it.
 FIELD_CATALOG: list[dict[str, Any]] = [
     # Age
-    {"field": "age_days", "category": "Age", "type": "number", "applies": ["movie", "season", "series"]},
-    {"field": "release_age_days", "category": "Age", "type": "number", "applies": ["movie", "season", "series"]},
+    {
+        "field": "age_days",
+        "category": "Age",
+        "type": "number",
+        "applies": ["movie", "season", "series"],
+    },
+    {
+        "field": "release_age_days",
+        "category": "Age",
+        "type": "number",
+        "applies": ["movie", "season", "series"],
+    },
     # Watch
-    {"field": "last_watched_days", "category": "Watch", "type": "number", "applies": ["movie", "series"]},
-    {"field": "total_plays", "category": "Watch", "type": "number", "applies": ["movie", "season", "series"]},
-    {"field": "distinct_watchers", "category": "Watch", "type": "number", "applies": ["movie", "season", "series"]},
-    {"field": "max_completion_pct", "category": "Watch", "type": "number", "applies": ["movie", "series"]},
-    {"field": "watched_by_requester", "category": "Watch", "type": "bool", "applies": ["movie", "season", "series"]},
-    {"field": "is_favorite_any_user", "category": "Watch", "type": "bool", "applies": ["movie", "series"]},
+    {
+        "field": "last_watched_days",
+        "category": "Watch",
+        "type": "number",
+        "applies": ["movie", "series"],
+    },
+    {
+        "field": "total_plays",
+        "category": "Watch",
+        "type": "number",
+        "applies": ["movie", "season", "series"],
+    },
+    {
+        "field": "distinct_watchers",
+        "category": "Watch",
+        "type": "number",
+        "applies": ["movie", "season", "series"],
+    },
+    {
+        "field": "max_completion_pct",
+        "category": "Watch",
+        "type": "number",
+        "applies": ["movie", "series"],
+    },
+    {
+        "field": "watched_by_requester",
+        "category": "Watch",
+        "type": "bool",
+        "applies": ["movie", "season", "series"],
+    },
+    {
+        "field": "is_favorite_any_user",
+        "category": "Watch",
+        "type": "bool",
+        "applies": ["movie", "series"],
+    },
     # Request
-    {"field": "was_requested", "category": "Request", "type": "bool", "applies": ["movie", "season", "series"]},
-    {"field": "requested_days_ago", "category": "Request", "type": "number", "applies": ["movie", "season", "series"]},
-    {"field": "requester_inactive_days", "category": "Request", "type": "number", "applies": ["movie", "season", "series"]},
+    {
+        "field": "was_requested",
+        "category": "Request",
+        "type": "bool",
+        "applies": ["movie", "season", "series"],
+    },
+    {
+        "field": "requested_days_ago",
+        "category": "Request",
+        "type": "number",
+        "applies": ["movie", "season", "series"],
+    },
+    {
+        "field": "requester_inactive_days",
+        "category": "Request",
+        "type": "number",
+        "applies": ["movie", "season", "series"],
+    },
     # File
-    {"field": "size_gb", "category": "File", "type": "number", "applies": ["movie", "series"]},
-    {"field": "quality", "category": "File", "type": "string", "applies": ["movie", "series"]},
-    {"field": "video_resolution", "category": "File", "type": "string", "applies": ["movie", "series"]},
+    {
+        "field": "size_gb",
+        "category": "File",
+        "type": "number",
+        "applies": ["movie", "series"],
+    },
+    {
+        "field": "quality",
+        "category": "File",
+        "type": "string",
+        "applies": ["movie", "series"],
+    },
+    {
+        "field": "video_resolution",
+        "category": "File",
+        "type": "string",
+        "applies": ["movie", "series"],
+    },
     # Series-level
-    {"field": "series_status", "category": "Series", "type": "string", "applies": ["season", "series"]},
-    {"field": "pct_episodes_watched", "category": "Series", "type": "number", "applies": ["season", "series"]},
+    {
+        "field": "series_status",
+        "category": "Series",
+        "type": "string",
+        "applies": ["season", "series"],
+    },
+    {
+        "field": "pct_episodes_watched",
+        "category": "Series",
+        "type": "number",
+        "applies": ["season", "series"],
+    },
     # Season-level
-    {"field": "season_age_days", "category": "Season", "type": "number", "applies": ["season"]},
-    {"field": "season_last_watched_days", "category": "Season", "type": "number", "applies": ["season"]},
-    {"field": "pct_season_watched", "category": "Season", "type": "number", "applies": ["season"]},
-    {"field": "season_size_gb", "category": "Season", "type": "number", "applies": ["season"]},
-    {"field": "season_number", "category": "Season", "type": "number", "applies": ["season"]},
-    {"field": "is_latest_season", "category": "Season", "type": "bool", "applies": ["season"]},
+    {
+        "field": "season_age_days",
+        "category": "Season",
+        "type": "number",
+        "applies": ["season"],
+    },
+    {
+        "field": "season_last_watched_days",
+        "category": "Season",
+        "type": "number",
+        "applies": ["season"],
+    },
+    {
+        "field": "pct_season_watched",
+        "category": "Season",
+        "type": "number",
+        "applies": ["season"],
+    },
+    {
+        "field": "season_size_gb",
+        "category": "Season",
+        "type": "number",
+        "applies": ["season"],
+    },
+    {
+        "field": "season_number",
+        "category": "Season",
+        "type": "number",
+        "applies": ["season"],
+    },
+    {
+        "field": "is_latest_season",
+        "category": "Season",
+        "type": "bool",
+        "applies": ["season"],
+    },
     # Tags
-    {"field": "has_tag", "category": "Tags", "type": "tag", "applies": ["movie", "season", "series"]},
-    {"field": "not_has_tag", "category": "Tags", "type": "tag", "applies": ["movie", "season", "series"]},
+    {
+        "field": "has_tag",
+        "category": "Tags",
+        "type": "tag",
+        "applies": ["movie", "season", "series"],
+    },
+    {
+        "field": "not_has_tag",
+        "category": "Tags",
+        "type": "tag",
+        "applies": ["movie", "season", "series"],
+    },
     # Context
-    {"field": "disk_usage_pct", "category": "Context", "type": "number", "applies": ["movie", "season", "series"]},
-    {"field": "library", "category": "Context", "type": "string", "applies": ["movie", "season", "series"]},
+    {
+        "field": "disk_usage_pct",
+        "category": "Context",
+        "type": "number",
+        "applies": ["movie", "season", "series"],
+    },
+    {
+        "field": "library",
+        "category": "Context",
+        "type": "string",
+        "applies": ["movie", "season", "series"],
+    },
 ]
 
 FIELD_TYPES = {f["field"]: f["type"] for f in FIELD_CATALOG}
@@ -175,7 +306,9 @@ def matched_snapshot(node: dict, facts: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def count_condition_matches(node: dict, fact_rows: list[dict[str, Any]]) -> dict[str, int]:
+def count_condition_matches(
+    node: dict, fact_rows: list[dict[str, Any]]
+) -> dict[str, int]:
     """Per-leaf selectivity: how many rows each individual condition matches.
     Powers the per-row match counts in the builder (§05)."""
     counts: dict[str, int] = {}

@@ -1,4 +1,5 @@
 """SSE stream (§12): job completions + state changes so the UI updates live."""
+
 from __future__ import annotations
 
 import asyncio

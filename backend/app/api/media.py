@@ -1,4 +1,5 @@
 """Media explorer + item detail drawer (§12, §13)."""
+
 from __future__ import annotations
 
 from datetime import timezone
@@ -10,14 +11,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..db import get_session
-from ..models import AuditLog, ItemWatchFacts, MediaItem, Protection, Request, Season, User, utcnow
+from ..models import (
+    AuditLog,
+    ItemWatchFacts,
+    MediaItem,
+    Protection,
+    Request,
+    Season,
+    User,
+    utcnow,
+)
 from ..services import lifecycle
 from .auth import Principal, require_admin
 from .serializers import _last_watched_days, serialize_movie, serialize_season
 
 router = APIRouter(prefix="/api/v1", tags=["media"])
 
-GB = 1024 ** 3
+GB = 1024**3
 
 
 @router.get("/media")
@@ -30,8 +40,10 @@ async def list_media(
     session: AsyncSession = Depends(get_session),
     _: Principal = Depends(require_admin),
 ):
-    stmt = select(MediaItem).where(MediaItem.deleted_externally == False).options(  # noqa: E712
-        selectinload(MediaItem.seasons)
+    stmt = (
+        select(MediaItem)
+        .where(MediaItem.deleted_externally == False)
+        .options(selectinload(MediaItem.seasons))  # noqa: E712
     )
     if type:
         stmt = stmt.where(MediaItem.type == type)
@@ -44,23 +56,43 @@ async def list_media(
         facts = await session.get(ItemWatchFacts, it.id)
         watched_hours = 0.0
         if facts and facts.total_plays and it.runtime_minutes:
-            watched_hours = facts.total_plays * (it.runtime_minutes / 60.0) * (facts.max_completion_pct / 100.0 or 1)
+            watched_hours = (
+                facts.total_plays
+                * (it.runtime_minutes / 60.0)
+                * (facts.max_completion_pct / 100.0 or 1)
+            )
         size_gb = round((it.size_bytes or 0) / GB, 1)
         gb_per_hour = (size_gb / watched_hours) if watched_hours > 0 else None
         seasons = []
         if it.type == "series":
             for s in sorted(it.seasons, key=lambda x: x.season_number):
-                seasons.append({"season_number": s.season_number, "state": s.state, "size_gb": round((s.size_bytes or 0) / GB, 1)})
-        rows.append({
-            "media_item_id": it.id, "title": it.title, "type": it.type, "year": it.year,
-            "library": it.library, "size_gb": size_gb, "state": it.state,
-            "last_watched_days": _last_watched_days(facts),
-            "total_plays": facts.total_plays if facts else 0,
-            "distinct_watchers": facts.distinct_watchers if facts else 0,
-            "max_completion_pct": facts.max_completion_pct if facts else 0,
-            "gb_per_hour": round(gb_per_hour, 1) if gb_per_hour is not None else None,
-            "unmanaged": it.unmanaged, "seasons": seasons,
-        })
+                seasons.append(
+                    {
+                        "season_number": s.season_number,
+                        "state": s.state,
+                        "size_gb": round((s.size_bytes or 0) / GB, 1),
+                    }
+                )
+        rows.append(
+            {
+                "media_item_id": it.id,
+                "title": it.title,
+                "type": it.type,
+                "year": it.year,
+                "library": it.library,
+                "size_gb": size_gb,
+                "state": it.state,
+                "last_watched_days": _last_watched_days(facts),
+                "total_plays": facts.total_plays if facts else 0,
+                "distinct_watchers": facts.distinct_watchers if facts else 0,
+                "max_completion_pct": facts.max_completion_pct if facts else 0,
+                "gb_per_hour": (
+                    round(gb_per_hour, 1) if gb_per_hour is not None else None
+                ),
+                "unmanaged": it.unmanaged,
+                "seasons": seasons,
+            }
+        )
 
     def sort_value(r):
         if sort == "gb_per_hour":
@@ -86,12 +118,22 @@ async def list_media(
 
 
 @router.get("/media/{item_id}")
-async def media_detail(item_id: int, session: AsyncSession = Depends(get_session), _: Principal = Depends(require_admin)):
+async def media_detail(
+    item_id: int,
+    session: AsyncSession = Depends(get_session),
+    _: Principal = Depends(require_admin),
+):
     it = (
-        await session.execute(
-            select(MediaItem).where(MediaItem.id == item_id).options(selectinload(MediaItem.seasons))
+        (
+            await session.execute(
+                select(MediaItem)
+                .where(MediaItem.id == item_id)
+                .options(selectinload(MediaItem.seasons))
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if not it:
         raise HTTPException(404, "Not found")
 
@@ -99,9 +141,17 @@ async def media_detail(item_id: int, session: AsyncSession = Depends(get_session
         base = await serialize_movie(session, it)
         units = [lifecycle.Unit("movie", it, it)]
     else:
-        base = {"media_item_id": it.id, "title": it.title, "type": "series", "series_status": it.series_status,
-                "size_gb": round((it.size_bytes or 0) / GB, 1)}
-        base["seasons"] = [await serialize_season(session, it, s) for s in sorted(it.seasons, key=lambda x: x.season_number)]
+        base = {
+            "media_item_id": it.id,
+            "title": it.title,
+            "type": "series",
+            "series_status": it.series_status,
+            "size_gb": round((it.size_bytes or 0) / GB, 1),
+        }
+        base["seasons"] = [
+            await serialize_season(session, it, s)
+            for s in sorted(it.seasons, key=lambda x: x.season_number)
+        ]
         units = [lifecycle.Unit("season", s, it) for s in it.seasons]
 
     # Protections across the item's units.
@@ -109,19 +159,51 @@ async def media_detail(item_id: int, session: AsyncSession = Depends(get_session
     for u in units:
         protections += await lifecycle.protection_reasons(session, u)
 
-    reqs = (await session.execute(select(Request).where(Request.media_item_id == item_id))).scalars().all()
+    reqs = (
+        (await session.execute(select(Request).where(Request.media_item_id == item_id)))
+        .scalars()
+        .all()
+    )
     requests = []
     for r in reqs:
-        user = await session.get(User, r.requester_user_id) if r.requester_user_id else None
-        requests.append({
-            "requester": user.name if user else None,
-            "requested_at": r.requested_at.replace(tzinfo=timezone.utc).isoformat() if r.requested_at else None,
-            "season_number": r.season_number, "status": r.status,
-        })
+        user = (
+            await session.get(User, r.requester_user_id)
+            if r.requester_user_id
+            else None
+        )
+        requests.append(
+            {
+                "requester": user.name if user else None,
+                "requested_at": (
+                    r.requested_at.replace(tzinfo=timezone.utc).isoformat()
+                    if r.requested_at
+                    else None
+                ),
+                "season_number": r.season_number,
+                "status": r.status,
+            }
+        )
 
     history = (
-        await session.execute(select(AuditLog).where(AuditLog.media_item_id == item_id).order_by(AuditLog.ts.desc()).limit(30))
-    ).scalars().all()
-    audit = [{"ts": h.ts.replace(tzinfo=timezone.utc).isoformat(), "action": h.action, "actor": h.actor, "detail": h.detail} for h in history]
+        (
+            await session.execute(
+                select(AuditLog)
+                .where(AuditLog.media_item_id == item_id)
+                .order_by(AuditLog.ts.desc())
+                .limit(30)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    audit = [
+        {
+            "ts": h.ts.replace(tzinfo=timezone.utc).isoformat(),
+            "action": h.action,
+            "actor": h.actor,
+            "detail": h.detail,
+        }
+        for h in history
+    ]
 
     return {**base, "protections": protections, "requests": requests, "history": audit}

@@ -4,6 +4,7 @@ WAL + synchronous=NORMAL + busy_timeout + foreign_keys ON, applied on every
 connection. Writes go through short transactions; sessions are never held
 across an ``await`` to an external HTTP call.
 """
+
 from __future__ import annotations
 
 import logging

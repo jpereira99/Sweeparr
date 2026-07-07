@@ -1,4 +1,5 @@
 """Pydantic v2 request/response models for the API surface (§12)."""
+
 from __future__ import annotations
 
 from datetime import datetime

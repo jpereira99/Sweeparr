@@ -1,4 +1,5 @@
 """Shared response serialization for units and media rows."""
+
 from __future__ import annotations
 
 from datetime import timezone
@@ -7,9 +8,17 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models import ItemWatchFacts, LifecycleState, MediaItem, RuleSet, Season, SeasonWatchFacts, utcnow
+from ..models import (
+    ItemWatchFacts,
+    LifecycleState,
+    MediaItem,
+    RuleSet,
+    Season,
+    SeasonWatchFacts,
+    utcnow,
+)
 
-GB = 1024 ** 3
+GB = 1024**3
 
 
 def _iso(dt):
@@ -42,7 +51,11 @@ def _public_reason(snapshot: dict | None) -> str:
         v = snapshot["last_watched_days"].get("value")
         if v == "never":
             return "Never watched"
-        return f"Not watched in {int(v)}+ days" if isinstance(v, (int, float)) else "Not watched recently"
+        return (
+            f"Not watched in {int(v)}+ days"
+            if isinstance(v, (int, float))
+            else "Not watched recently"
+        )
     if "requester_inactive_days" in snapshot:
         return "Requester inactive"
     return "Matched a removal rule"
@@ -78,7 +91,9 @@ async def serialize_movie(session: AsyncSession, item: MediaItem) -> dict[str, A
     }
 
 
-async def serialize_season(session: AsyncSession, item: MediaItem, season: Season) -> dict[str, Any]:
+async def serialize_season(
+    session: AsyncSession, item: MediaItem, season: Season
+) -> dict[str, Any]:
     sf = await session.get(SeasonWatchFacts, season.id)
     return {
         "key": f"season:{season.id}",

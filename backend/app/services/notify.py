@@ -1,6 +1,7 @@
 """Notification channel abstraction (§8.3): ntfy first, generic webhook, and a
 DB-logged fallback so notifications are always auditable even without a channel.
 """
+
 from __future__ import annotations
 
 import httpx

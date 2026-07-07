@@ -17,7 +17,9 @@ export function KeepDeepLink() {
 
   async function submit() {
     if (!data) return;
-    await endpoints.createKeepRequest(data.unit_type, data.unit_id, { reason: note });
+    await endpoints.createKeepRequest(data.unit_type, data.unit_id, {
+      reason: note,
+    });
     setSent(true);
   }
 
@@ -27,16 +29,25 @@ export function KeepDeepLink() {
         {isLoading ? (
           <div className="p-8 text-center font-mono text-ink-low">Loading…</div>
         ) : isError || !data ? (
-          <div className="p-8 text-center text-ink-mid">This link has expired or the item is no longer leaving.</div>
+          <div className="p-8 text-center text-ink-mid">
+            This link has expired or the item is no longer leaving.
+          </div>
         ) : sent || data.status !== "pending" ? (
           <div className="flex min-h-[330px] flex-col p-4">
             <div className="mx-auto mb-3.5 mt-6 flex h-11 w-11 items-center justify-center rounded-pill border border-[rgba(63,162,111,0.45)] bg-[rgba(63,162,111,0.16)] text-lg text-state-kept-ink">
               ✓
             </div>
-            <div className="mb-1.5 text-center text-[15px] font-semibold text-ink-hi">Request sent</div>
+            <div className="mb-1.5 text-center text-[15px] font-semibold text-ink-hi">
+              Request sent
+            </div>
             <div className="mb-4 text-center text-[12px] leading-relaxed text-ink-mid">
-              {data.title}{data.season_number ? ` S${data.season_number}` : ""} stays put until an admin decides.{" "}
-              <strong className="text-ink-hi">Deletion is paused for this item</strong> while your request is pending.
+              {data.title}
+              {data.season_number ? ` S${data.season_number}` : ""} stays put
+              until an admin decides.{" "}
+              <strong className="text-ink-hi">
+                Deletion is paused for this item
+              </strong>{" "}
+              while your request is pending.
             </div>
             <div className="rounded-lg border border-line-subtle bg-bg-raised p-2.5 text-[11.5px] leading-relaxed text-ink-mid">
               You'll get a Jellyfin notification when it's decided.
@@ -47,18 +58,25 @@ export function KeepDeepLink() {
             <div className="poster-placeholder relative flex h-28 items-end">
               <div className="w-full bg-gradient-to-t from-bg-inset to-transparent p-3.5">
                 <div className="text-[15px] font-semibold text-ink-hi">
-                  {data.title}{data.season_number ? ` — Season ${data.season_number}` : ""}
+                  {data.title}
+                  {data.season_number ? ` — Season ${data.season_number}` : ""}
                 </div>
-                <div className="font-mono text-[10.5px] text-ink-mid">{gb(data.size_gb)}</div>
+                <div className="font-mono text-[10.5px] text-ink-mid">
+                  {gb(data.size_gb)}
+                </div>
               </div>
             </div>
             <div className="p-4">
               <span className="inline-flex items-center gap-1.5 rounded-pill border border-[rgba(229,72,77,0.4)] bg-[rgba(229,72,77,0.14)] px-2.5 py-1 text-[10.5px] font-semibold text-state-scheduled-ink">
                 ⏱ LEAVES {fmtDate(data.delete_at).toUpperCase()}
               </span>
-              <div className="my-2.5 text-[12px] text-ink-mid">Why: {data.reason_public}</div>
+              <div className="my-2.5 text-[12px] text-ink-mid">
+                Why: {data.reason_public}
+              </div>
               <div className="my-2.5 h-px bg-line-subtle" />
-              <div className="mb-1.5 text-[11px] text-ink-low">Add a note (optional)</div>
+              <div className="mb-1.5 text-[11px] text-ink-low">
+                Add a note (optional)
+              </div>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
@@ -70,7 +88,9 @@ export function KeepDeepLink() {
               >
                 ✓ Request to keep
               </button>
-              <div className="mt-2.5 text-center text-[11px] text-ink-low">Signed in as {data.requester ?? "you"} via Jellyfin</div>
+              <div className="mt-2.5 text-center text-[11px] text-ink-low">
+                Signed in as {data.requester ?? "you"} via Jellyfin
+              </div>
             </div>
           </>
         )}

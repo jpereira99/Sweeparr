@@ -3,6 +3,7 @@
 Facts are assembled from local DB rows only — no live API calls — so rule
 evaluation stays pure, fast and deterministic.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -22,7 +23,7 @@ from ..models import (
     utcnow,
 )
 
-GB = 1024 ** 3
+GB = 1024**3
 
 
 def _days_since(dt: Optional[datetime]) -> Optional[float]:
@@ -34,18 +35,36 @@ def _days_since(dt: Optional[datetime]) -> Optional[float]:
 
 
 async def _tags(session: AsyncSession, item_id: int) -> list[str]:
-    rows = (await session.execute(select(ArrTag.tag).where(ArrTag.media_item_id == item_id))).scalars().all()
+    rows = (
+        (
+            await session.execute(
+                select(ArrTag.tag).where(ArrTag.media_item_id == item_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
 async def _request_facts(session: AsyncSession, item_id: int) -> dict[str, Any]:
     req = (
-        await session.execute(
-            select(Request).where(Request.media_item_id == item_id).order_by(Request.requested_at.desc())
+        (
+            await session.execute(
+                select(Request)
+                .where(Request.media_item_id == item_id)
+                .order_by(Request.requested_at.desc())
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if req is None:
-        return {"was_requested": False, "requested_days_ago": None, "requester_inactive_days": None}
+        return {
+            "was_requested": False,
+            "requested_days_ago": None,
+            "requester_inactive_days": None,
+        }
     inactive = None
     if req.requester_user_id is not None:
         user = await session.get(User, req.requester_user_id)
@@ -99,7 +118,9 @@ async def build_season_facts(
         "is_latest_season": season.is_latest_season,
         "season_age_days": _days_since(season.newest_file_date),
         "age_days": _days_since(season.newest_file_date),
-        "season_last_watched_days": _days_since(sfacts.last_watched_at) if sfacts else None,
+        "season_last_watched_days": (
+            _days_since(sfacts.last_watched_at) if sfacts else None
+        ),
         "last_watched_days": _days_since(sfacts.last_watched_at) if sfacts else None,
         "pct_season_watched": sfacts.pct_season_watched if sfacts else 0.0,
         "season_size_gb": (season.size_bytes or 0) / GB,

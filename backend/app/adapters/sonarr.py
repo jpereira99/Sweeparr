@@ -4,6 +4,7 @@ Season deletion is the three-step paranoid path: unmonitor the season via a
 series update FIRST (crash-safety — an unmonitored season can't re-grab), then
 bulk-delete its episode files, then verify the season's file list is empty.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -21,7 +22,10 @@ class SonarrAdapter(IntegrationAdapter):
         return await self._request("GET", "/api/v3/series") or []
 
     async def get_episode_files(self, series_id: int) -> list[dict[str, Any]]:
-        return await self._request("GET", f"/api/v3/episodefile?seriesId={series_id}") or []
+        return (
+            await self._request("GET", f"/api/v3/episodefile?seriesId={series_id}")
+            or []
+        )
 
     async def get_diskspace(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/api/v3/diskspace") or []
@@ -29,7 +33,9 @@ class SonarrAdapter(IntegrationAdapter):
     async def update_series(self, series: dict[str, Any]) -> dict[str, Any]:
         return await self._request("PUT", f"/api/v3/series/{series['id']}", json=series)
 
-    async def set_season_monitored(self, series_id: int, season_number: int, monitored: bool) -> None:
+    async def set_season_monitored(
+        self, series_id: int, season_number: int, monitored: bool
+    ) -> None:
         series = await self._request("GET", f"/api/v3/series/{series_id}")
         for s in series.get("seasons", []):
             if s.get("seasonNumber") == season_number:

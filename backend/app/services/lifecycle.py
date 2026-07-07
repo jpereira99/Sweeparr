@@ -3,6 +3,7 @@
 The scheduler is the single gate: there is no code path from "rule matched"
 straight to "file gone". Everything is auditable and idempotent.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -57,17 +58,26 @@ class Unit:
         return self.obj.size_bytes or 0
 
 
-async def _movie_units(session: AsyncSession, library: Optional[str] = None) -> list[Unit]:
-    stmt = select(MediaItem).where(
-        MediaItem.type == "movie", MediaItem.deleted_externally == False  # noqa: E712
-    ).options(selectinload(MediaItem.facts))
+async def _movie_units(
+    session: AsyncSession, library: Optional[str] = None
+) -> list[Unit]:
+    stmt = (
+        select(MediaItem)
+        .where(
+            MediaItem.type == "movie",
+            MediaItem.deleted_externally == False,  # noqa: E712
+        )
+        .options(selectinload(MediaItem.facts))
+    )
     if library:
         stmt = stmt.where(MediaItem.library == library)
     items = (await session.execute(stmt)).scalars().all()
     return [Unit("movie", it, it) for it in items]
 
 
-async def _season_units(session: AsyncSession, library: Optional[str] = None) -> list[Unit]:
+async def _season_units(
+    session: AsyncSession, library: Optional[str] = None
+) -> list[Unit]:
     stmt = (
         select(Season, MediaItem)
         .join(MediaItem, Season.media_item_id == MediaItem.id)
@@ -80,7 +90,9 @@ async def _season_units(session: AsyncSession, library: Optional[str] = None) ->
     return [Unit("season", season, item) for season, item in rows]
 
 
-async def get_unit(session: AsyncSession, unit_type: str, unit_id: int) -> Optional[Unit]:
+async def get_unit(
+    session: AsyncSession, unit_type: str, unit_id: int
+) -> Optional[Unit]:
     if unit_type == UnitType.movie.value:
         item = await session.get(MediaItem, unit_id)
         return Unit("movie", item, item) if item else None
@@ -118,7 +130,12 @@ async def protection_reasons(session: AsyncSession, unit: Unit) -> list[dict[str
     settings = await all_settings(session)
 
     if unit.item.unmanaged:
-        reasons.append({"kind": "unmanaged", "detail": "No Sonarr/Radarr counterpart to delete through"})
+        reasons.append(
+            {
+                "kind": "unmanaged",
+                "detail": "No Sonarr/Radarr counterpart to delete through",
+            }
+        )
 
     facts_tags = await build_facts(session, unit)
     if "sweeparr-keep" in (facts_tags.get("has_tag") or []):
@@ -127,27 +144,44 @@ async def protection_reasons(session: AsyncSession, unit: Unit) -> list[dict[str
     if settings.get("favorite_protects") and facts_tags.get("is_favorite_any_user"):
         reasons.append({"kind": "favorite", "detail": "Jellyfin favorite"})
 
-    if settings.get("airing_protects") and unit.item.series_status == "continuing" and unit.type == "season":
+    if (
+        settings.get("airing_protects")
+        and unit.item.series_status == "continuing"
+        and unit.type == "season"
+    ):
         if unit.obj.is_latest_season:
-            reasons.append({"kind": "airing", "detail": "Latest season of a continuing series"})
+            reasons.append(
+                {"kind": "airing", "detail": "Latest season of a continuing series"}
+            )
 
     window = settings.get("request_protection_days") or 0
     rda = facts_tags.get("requested_days_ago")
     if window and rda is not None and rda < window:
-        reasons.append({"kind": "request_window", "detail": f"Requested {int(rda)}d ago (< {window}d)"})
+        reasons.append(
+            {
+                "kind": "request_window",
+                "detail": f"Requested {int(rda)}d ago (< {window}d)",
+            }
+        )
 
     kq = (
-        await session.execute(
-            select(KeepRequest).where(
-                KeepRequest.unit_type == unit.type,
-                KeepRequest.unit_id == unit.id,
-                KeepRequest.status.in_(["approved", "pending"]),
+        (
+            await session.execute(
+                select(KeepRequest).where(
+                    KeepRequest.unit_type == unit.type,
+                    KeepRequest.unit_id == unit.id,
+                    KeepRequest.status.in_(["approved", "pending"]),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for k in kq:
         if k.status == "pending":
-            reasons.append({"kind": "keep", "detail": "Keep request pending admin decision"})
+            reasons.append(
+                {"kind": "keep", "detail": "Keep request pending admin decision"}
+            )
         elif k.expires_at is None or _aware(k.expires_at) > utcnow():
             who = f"user #{k.user_id}" if k.user_id else "admin"
             reasons.append({"kind": "keep", "detail": f"Kept by {who}"})
@@ -202,7 +236,11 @@ async def run_evaluate_rules(session: AsyncSession) -> dict[str, Any]:
 
     settings = await all_settings(session)
     tiers = settings.get("disk_pressure_tiers") or []
-    rules = (await session.execute(select(RuleSet).order_by(RuleSet.sort_order))).scalars().all()
+    rules = (
+        (await session.execute(select(RuleSet).order_by(RuleSet.sort_order)))
+        .scalars()
+        .all()
+    )
 
     scheduled = demoted = 0
     for rule in rules:
@@ -232,7 +270,11 @@ async def run_evaluate_rules(session: AsyncSession) -> dict[str, Any]:
                     session,
                     unit,
                     "scheduled",
-                    {"rule": rule.name, "grace_days": grace, "delete_at": obj.delete_at.isoformat()},
+                    {
+                        "rule": rule.name,
+                        "grace_days": grace,
+                        "delete_at": obj.delete_at.isoformat(),
+                    },
                 )
                 if rule.notify_requester or rule.notify_admin:
                     await notify.send(
@@ -241,11 +283,19 @@ async def run_evaluate_rules(session: AsyncSession) -> dict[str, Any]:
                         body=f"Leaves {obj.delete_at.date()} — rule {rule.name}",
                         media_item_id=unit.item.id,
                     )
-            elif obj.state == LifecycleState.SCHEDULED.value and obj.matched_rule_id == rule.id:
+            elif (
+                obj.state == LifecycleState.SCHEDULED.value
+                and obj.matched_rule_id == rule.id
+            ):
                 new_at = utcnow() + timedelta(days=grace)
                 if obj.delete_at and new_at < _aware(obj.delete_at):
                     obj.delete_at = new_at
-                    _audit(session, unit, "grace_shortened", {"rule": rule.name, "delete_at": new_at.isoformat()})
+                    _audit(
+                        session,
+                        unit,
+                        "grace_shortened",
+                        {"rule": rule.name, "delete_at": new_at.isoformat()},
+                    )
 
         from ..models import RuleMatchHistory
 
@@ -262,17 +312,23 @@ async def run_evaluate_rules(session: AsyncSession) -> dict[str, Any]:
     return {"scheduled": scheduled, "demoted": demoted}
 
 
-async def _demote_stale(session: AsyncSession, rule: RuleSet, matched_keys: set[str]) -> None:
+async def _demote_stale(
+    session: AsyncSession, rule: RuleSet, matched_keys: set[str]
+) -> None:
     """Units this rule owns that no longer match are demoted back to ACTIVE."""
     for model, utype in ((MediaItem, "movie"), (Season, "season")):
         rows = (
-            await session.execute(
-                select(model).where(
-                    model.matched_rule_id == rule.id,
-                    model.state == LifecycleState.SCHEDULED.value,
+            (
+                await session.execute(
+                    select(model).where(
+                        model.matched_rule_id == rule.id,
+                        model.state == LifecycleState.SCHEDULED.value,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for obj in rows:
             key = f"{utype}:{obj.id}"
             if key not in matched_keys:
@@ -282,7 +338,13 @@ async def _demote_stale(session: AsyncSession, rule: RuleSet, matched_keys: set[
                 obj.match_snapshot = None
 
 
-def _audit(session: AsyncSession, unit: Unit, action: str, detail: dict[str, Any], actor: str = "system") -> None:
+def _audit(
+    session: AsyncSession,
+    unit: Unit,
+    action: str,
+    detail: dict[str, Any],
+    actor: str = "system",
+) -> None:
     session.add(
         AuditLog(
             media_item_id=unit.item.id,
@@ -295,7 +357,9 @@ def _audit(session: AsyncSession, unit: Unit, action: str, detail: dict[str, Any
     )
 
 
-async def _to_kept(session: AsyncSession, unit: Unit, rule: Optional[RuleSet], protections, actor: str) -> None:
+async def _to_kept(
+    session: AsyncSession, unit: Unit, rule: Optional[RuleSet], protections, actor: str
+) -> None:
     obj = unit.obj
     if obj.state in (LifecycleState.DELETING.value, LifecycleState.DELETED.value):
         return
@@ -311,7 +375,12 @@ async def _to_kept(session: AsyncSession, unit: Unit, rule: Optional[RuleSet], p
 # Manual transitions (admin/user actions from the API)
 # --------------------------------------------------------------------------- #
 async def keep_unit(
-    session: AsyncSession, unit: Unit, *, days: Optional[int], actor: str, reason: str | None = None
+    session: AsyncSession,
+    unit: Unit,
+    *,
+    days: Optional[int],
+    actor: str,
+    reason: str | None = None,
 ) -> None:
     obj = unit.obj
     obj.state = LifecycleState.KEPT.value
@@ -326,12 +395,20 @@ async def keep_unit(
             expires_at=expires,
         )
     )
-    _audit(session, unit, "kept", {"days": days, "reason": reason, "by": actor}, actor=actor)
+    _audit(
+        session,
+        unit,
+        "kept",
+        {"days": days, "reason": reason, "by": actor},
+        actor=actor,
+    )
     await session.commit()
     publish("unit_changed", {"key": unit.key, "state": obj.state})
 
 
-async def schedule_unit(session: AsyncSession, unit: Unit, *, days: int, actor: str) -> None:
+async def schedule_unit(
+    session: AsyncSession, unit: Unit, *, days: int, actor: str
+) -> None:
     obj = unit.obj
     obj.state = LifecycleState.SCHEDULED.value
     obj.delete_at = utcnow() + timedelta(days=days)
@@ -350,11 +427,19 @@ async def unschedule_unit(session: AsyncSession, unit: Unit, *, actor: str) -> N
     publish("unit_changed", {"key": unit.key, "state": obj.state})
 
 
-async def postpone_unit(session: AsyncSession, unit: Unit, *, days: int, actor: str) -> None:
+async def postpone_unit(
+    session: AsyncSession, unit: Unit, *, days: int, actor: str
+) -> None:
     obj = unit.obj
     base = _aware(obj.delete_at) if obj.delete_at else utcnow()
     obj.delete_at = base + timedelta(days=days)
-    _audit(session, unit, "postponed", {"days": days, "by": actor, "delete_at": obj.delete_at.isoformat()}, actor=actor)
+    _audit(
+        session,
+        unit,
+        "postponed",
+        {"days": days, "by": actor, "delete_at": obj.delete_at.isoformat()},
+        actor=actor,
+    )
     await session.commit()
     publish("unit_changed", {"key": unit.key, "delete_at": obj.delete_at.isoformat()})
 
@@ -362,7 +447,9 @@ async def postpone_unit(session: AsyncSession, unit: Unit, *, days: int, actor: 
 # --------------------------------------------------------------------------- #
 # Deletion executor — the paranoid path (§7.3)
 # --------------------------------------------------------------------------- #
-async def run_execute_deletions(session: AsyncSession, *, force: bool = False) -> dict[str, Any]:
+async def run_execute_deletions(
+    session: AsyncSession, *, force: bool = False
+) -> dict[str, Any]:
     if not await is_system_enabled(session) and not force:
         return {"skipped": "system_off"}
 
@@ -371,18 +458,30 @@ async def run_execute_deletions(session: AsyncSession, *, force: bool = False) -
 
     due: list[Unit] = []
     movies = (
-        await session.execute(
-            select(MediaItem).where(
-                MediaItem.state == LifecycleState.SCHEDULED.value, MediaItem.delete_at <= now
+        (
+            await session.execute(
+                select(MediaItem).where(
+                    MediaItem.state == LifecycleState.SCHEDULED.value,
+                    MediaItem.delete_at <= now,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     due += [Unit("movie", m, m) for m in movies]
     seasons = (
-        await session.execute(
-            select(Season).where(Season.state == LifecycleState.SCHEDULED.value, Season.delete_at <= now)
+        (
+            await session.execute(
+                select(Season).where(
+                    Season.state == LifecycleState.SCHEDULED.value,
+                    Season.delete_at <= now,
+                )
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for s in seasons:
         item = await session.get(MediaItem, s.media_item_id)
         due.append(Unit("season", s, item))
@@ -393,7 +492,11 @@ async def run_execute_deletions(session: AsyncSession, *, force: bool = False) -
 
     for unit in due:
         obj = unit.obj
-        rule = await session.get(RuleSet, obj.matched_rule_id) if obj.matched_rule_id else None
+        rule = (
+            await session.get(RuleSet, obj.matched_rule_id)
+            if obj.matched_rule_id
+            else None
+        )
         if rule and not rule.enabled and not force:
             continue
         obj.state = LifecycleState.DELETING.value
@@ -412,7 +515,12 @@ async def run_execute_deletions(session: AsyncSession, *, force: bool = False) -
             obj.delete_at = None
             deleted += 1
             bytes_freed += unit.size_bytes
-            _audit(session, unit, "deleted", {"bytes_freed": unit.size_bytes, "rule": rule.name if rule else None})
+            _audit(
+                session,
+                unit,
+                "deleted",
+                {"bytes_freed": unit.size_bytes, "rule": rule.name if rule else None},
+            )
             await notify.send(
                 session,
                 subject=f"Deleted: {unit.item.title}",
@@ -423,7 +531,9 @@ async def run_execute_deletions(session: AsyncSession, *, force: bool = False) -
         except Exception as exc:  # noqa: BLE001
             obj.state = LifecycleState.ERROR.value
             _audit(session, unit, "error", {"error": str(exc)})
-            await notify.send(session, subject=f"Deletion failed: {unit.item.title}", body=str(exc))
+            await notify.send(
+                session, subject=f"Deletion failed: {unit.item.title}", body=str(exc)
+            )
             results.append({"unit": unit.key, "result": "error", "detail": str(exc)})
         await session.commit()
 
@@ -437,7 +547,9 @@ async def run_execute_deletions(session: AsyncSession, *, force: bool = False) -
     return {"deleted": deleted, "bytes_freed": bytes_freed, "results": results}
 
 
-async def _execute_one(session: AsyncSession, unit: Unit, integ, rule: Optional[RuleSet]) -> None:
+async def _execute_one(
+    session: AsyncSession, unit: Unit, integ, rule: Optional[RuleSet]
+) -> None:
     if unit.type == "movie":
         movie_id = unit.item.radarr_id
         if movie_id is None:
@@ -463,10 +575,18 @@ async def _execute_one(session: AsyncSession, unit: Unit, integ, rule: Optional[
 
 
 async def scheduled_count(session: AsyncSession) -> int:
-    m = (await session.execute(
-        select(func.count()).select_from(MediaItem).where(MediaItem.state == LifecycleState.SCHEDULED.value)
-    )).scalar_one()
-    s = (await session.execute(
-        select(func.count()).select_from(Season).where(Season.state == LifecycleState.SCHEDULED.value)
-    )).scalar_one()
+    m = (
+        await session.execute(
+            select(func.count())
+            .select_from(MediaItem)
+            .where(MediaItem.state == LifecycleState.SCHEDULED.value)
+        )
+    ).scalar_one()
+    s = (
+        await session.execute(
+            select(func.count())
+            .select_from(Season)
+            .where(Season.state == LifecycleState.SCHEDULED.value)
+        )
+    ).scalar_one()
     return int(m) + int(s)

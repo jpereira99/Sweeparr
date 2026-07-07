@@ -1,0 +1,24 @@
+services:
+  sweeparr:
+    image: ghcr.io/jpereira99/sweeparr:latest
+    container_name: sweeparr
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config:/config
+    environment:
+      SWEEPARR_TIMEZONE: "America/New_York"
+      SWEEPARR_SESSION_SECRET: "change-me-to-a-long-random-string"
+      SWEEPARR_ADMIN_USERNAME: "admin"
+      SWEEPARR_ADMIN_PASSWORD: "change-me"
+      SWEEPARR_JELLYFIN_URL: "${JELLYFIN_URL:-}"
+      SWEEPARR_JELLYFIN_API_KEY: "${JELLYFIN_API_KEY:-}"
+      SWEEPARR_JELLYSEERR_URL: "${JELLYSEERR_URL:-}"
+      SWEEPARR_JELLYSEERR_API_KEY: "${JELLYSEERR_API_KEY:-}"
+      SWEEPARR_SONARR_URL: "${SONARR_URL:-}"
+      SWEEPARR_SONARR_API_KEY: "${SONARR_API_KEY:-}"
+      SWEEPARR_RADARR_URL: "${RADARR_URL:-}"
+      SWEEPARR_RADARR_API_KEY: "${RADARR_API_KEY:-}"
+      SWEEPARR_NTFY_URL: "${NTFY_URL:-}"
+      SWEEPARR_NTFY_TOPIC: "${NTFY_TOPIC:-}"

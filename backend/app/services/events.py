@@ -1,4 +1,5 @@
 """Tiny in-process pub/sub for the SSE stream (§12) so the UI updates live."""
+
 from __future__ import annotations
 
 import asyncio

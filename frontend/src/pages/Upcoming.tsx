@@ -45,20 +45,29 @@ export function Upcoming() {
   async function deleteNow(u: any) {
     if (!confirm(`Delete ${u.title} now? This executes immediately.`)) return;
     const r = await endpoints.deleteNow(u.unit_type, u.unit_id);
-    toast(r.result?.skipped ? "System paused — nothing deleted" : `Deleted ${u.title}`);
+    toast(
+      r.result?.skipped
+        ? "System paused — nothing deleted"
+        : `Deleted ${u.title}`,
+    );
     qc.invalidateQueries();
   }
 
   return (
     <div>
-      <PageHeader title="Upcoming Removals" subtitle="everything scheduled sits here for its whole grace window" />
+      <PageHeader
+        title="Upcoming Removals"
+        subtitle="everything scheduled sits here for its whole grace window"
+      />
 
       <div className="mb-4 flex items-center gap-3">
         <span className="font-mono text-[12px] text-state-scheduled-ink">
           {data?.scheduled_count ?? 0} scheduled · {gb(data?.total_gb)}
         </span>
         {data?.system_enabled === false && (
-          <span className="font-mono text-[11px] text-state-error-ink">■ system paused</span>
+          <span className="font-mono text-[11px] text-state-error-ink">
+            ■ system paused
+          </span>
         )}
         <span className="ml-auto inline-flex overflow-hidden rounded border border-line">
           {(["calendar", "list"] as const).map((v) => (
@@ -76,10 +85,16 @@ export function Upcoming() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Chip active={typeFilter === "tv"} onClick={() => setTypeFilter(typeFilter === "tv" ? null : "tv")}>
+        <Chip
+          active={typeFilter === "tv"}
+          onClick={() => setTypeFilter(typeFilter === "tv" ? null : "tv")}
+        >
           TV seasons {typeFilter === "tv" ? "✕" : ""}
         </Chip>
-        <Chip active={typeFilter === "movie"} onClick={() => setTypeFilter(typeFilter === "movie" ? null : "movie")}>
+        <Chip
+          active={typeFilter === "movie"}
+          onClick={() => setTypeFilter(typeFilter === "movie" ? null : "movie")}
+        >
           Movies {typeFilter === "movie" ? "✕" : ""}
         </Chip>
       </div>
@@ -88,8 +103,12 @@ export function Upcoming() {
         <Skeleton rows={6} />
       ) : units.length === 0 ? (
         <EmptyState title="Nothing is scheduled">
-          When an enabled rule matches something, it appears here for the grace window before deletion.{" "}
-          <button className="text-accent-hover" onClick={() => navigate("/rules")}>
+          When an enabled rule matches something, it appears here for the grace
+          window before deletion.{" "}
+          <button
+            className="text-accent-hover"
+            onClick={() => navigate("/rules")}
+          >
             Review rules
           </button>
         </EmptyState>
@@ -130,13 +149,19 @@ function CalendarView({ units }: { units: any[] }) {
     d.setDate(start.getDate() + i);
     return d;
   });
-  const maxCount = Math.max(1, ...Array.from(byDay.values()).map((v) => v.length));
+  const maxCount = Math.max(
+    1,
+    ...Array.from(byDay.values()).map((v) => v.length),
+  );
 
   return (
     <div className="rounded-lg border border-line bg-bg p-4">
       <div className="mb-1 grid grid-cols-7 gap-1.5">
         {["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map((d) => (
-          <div key={d} className="px-1.5 py-1 text-[10.5px] font-semibold tracking-[0.08em] text-ink-faint">
+          <div
+            key={d}
+            className="px-1.5 py-1 text-[10.5px] font-semibold tracking-[0.08em] text-ink-faint"
+          >
             {d}
           </div>
         ))}
@@ -156,18 +181,25 @@ function CalendarView({ units }: { units: any[] }) {
                 border: isToday
                   ? "1px solid rgba(91,141,239,0.55)"
                   : hasItems
-                  ? "1px solid rgba(229,72,77,0.4)"
-                  : "1px solid #141A26",
+                    ? "1px solid rgba(229,72,77,0.4)"
+                    : "1px solid #141A26",
               }}
             >
               {hasItems && (
-                <div className="absolute left-0 top-0 h-[3px] bg-state-scheduled" style={{ width: `${heat}%` }} />
+                <div
+                  className="absolute left-0 top-0 h-[3px] bg-state-scheduled"
+                  style={{ width: `${heat}%` }}
+                />
               )}
               <div className="mt-0.5 flex justify-between">
-                <span className={`font-mono text-[11px] ${hasItems || isToday ? "text-ink-hi" : "text-ink-faint"}`}>
+                <span
+                  className={`font-mono text-[11px] ${hasItems || isToday ? "text-ink-hi" : "text-ink-faint"}`}
+                >
                   {d.getDate()}
                 </span>
-                {isToday && <span className="text-[10px] text-ink-low">today</span>}
+                {isToday && (
+                  <span className="text-[10px] text-ink-low">today</span>
+                )}
               </div>
               {items.slice(0, 3).map((u) => (
                 <div
@@ -185,7 +217,8 @@ function CalendarView({ units }: { units: any[] }) {
               )}
               {hasItems && items.length <= 3 && (
                 <div className="mt-auto font-mono text-[9.5px] text-ink-low">
-                  {items.length} · {gb(items.reduce((a, x) => a + x.size_gb, 0))}
+                  {items.length} ·{" "}
+                  {gb(items.reduce((a, x) => a + x.size_gb, 0))}
                 </div>
               )}
             </div>
@@ -196,8 +229,17 @@ function CalendarView({ units }: { units: any[] }) {
   );
 }
 
-function ListView({ units, selected, setSelected, keep, postpone, deleteNow, navigate }: any) {
-  const cols = "grid-cols-[36px_56px_minmax(180px,1.4fr)_220px_120px_1fr_90px_190px]";
+function ListView({
+  units,
+  selected,
+  setSelected,
+  keep,
+  postpone,
+  deleteNow,
+  navigate,
+}: any) {
+  const cols =
+    "grid-cols-[36px_56px_minmax(180px,1.4fr)_220px_120px_1fr_90px_190px]";
   const toggle = (k: string) => {
     const next = new Set<string>(selected);
     next.has(k) ? next.delete(k) : next.add(k);
@@ -211,9 +253,23 @@ function ListView({ units, selected, setSelected, keep, postpone, deleteNow, nav
           <span className="ml-auto text-ink-hi">{selected.size} selected</span>
         )}
       </div>
-      <div className={`grid ${cols} gap-x-3 border-b border-line-subtle px-6 py-2`}>
-        {["", "", "TITLE", "STATUS", "DELETES", "RULE · WHY", "FREES", "ACTIONS"].map((h, i) => (
-          <span key={i} className={`text-[10.5px] font-semibold tracking-[0.08em] text-ink-low ${i >= 6 ? "text-right" : ""}`}>
+      <div
+        className={`grid ${cols} gap-x-3 border-b border-line-subtle px-6 py-2`}
+      >
+        {[
+          "",
+          "",
+          "TITLE",
+          "STATUS",
+          "DELETES",
+          "RULE · WHY",
+          "FREES",
+          "ACTIONS",
+        ].map((h, i) => (
+          <span
+            key={i}
+            className={`text-[10.5px] font-semibold tracking-[0.08em] text-ink-low ${i >= 6 ? "text-right" : ""}`}
+          >
             {h}
           </span>
         ))}
@@ -221,7 +277,10 @@ function ListView({ units, selected, setSelected, keep, postpone, deleteNow, nav
       {units.map((u: any) => {
         const cd = countdown(u.days_until);
         return (
-          <div key={u.key} className={`grid ${cols} items-center gap-x-3 border-b border-[#141A26] px-6 py-2`}>
+          <div
+            key={u.key}
+            className={`grid ${cols} items-center gap-x-3 border-b border-[#141A26] px-6 py-2`}
+          >
             <span>
               {u.state !== "ERROR" && (
                 <input
@@ -247,7 +306,9 @@ function ListView({ units, selected, setSelected, keep, postpone, deleteNow, nav
               </button>
               <span className="text-[11.5px] text-ink-low">
                 {u.unit_type === "season" ? "TV" : "Movie"}
-                {u.last_watched_days != null ? ` · last watched ${u.last_watched_days}d ago` : ""}
+                {u.last_watched_days != null
+                  ? ` · last watched ${u.last_watched_days}d ago`
+                  : ""}
               </span>
             </span>
             <span className="flex items-center gap-1.5">
@@ -256,7 +317,9 @@ function ListView({ units, selected, setSelected, keep, postpone, deleteNow, nav
             </span>
             <span>
               {u.state === "ERROR" ? (
-                <span className="font-mono text-[11.5px] text-state-error-ink">held</span>
+                <span className="font-mono text-[11.5px] text-state-error-ink">
+                  held
+                </span>
               ) : cd.urgent ? (
                 <span className="rounded bg-state-scheduled px-2 py-0.5 font-mono text-[11.5px] font-semibold text-white">
                   {cd.label}
@@ -269,14 +332,18 @@ function ListView({ units, selected, setSelected, keep, postpone, deleteNow, nav
             </span>
             <span className="text-[12px] text-ink-mid">
               {u.state === "ERROR" ? (
-                <span className="text-state-error-ink">Deletion failed — check the integration in Settings</span>
+                <span className="text-state-error-ink">
+                  Deletion failed — check the integration in Settings
+                </span>
               ) : (
                 <>
                   {u.rule_name} — {u.reason_public}
                 </>
               )}
             </span>
-            <span className="text-right font-mono text-[12px] text-ink-hi">{gb(u.size_gb)}</span>
+            <span className="text-right font-mono text-[12px] text-ink-hi">
+              {gb(u.size_gb)}
+            </span>
             <span className="flex justify-end gap-1.5">
               {u.state === "ERROR" ? (
                 <>
@@ -301,7 +368,15 @@ function ListView({ units, selected, setSelected, keep, postpone, deleteNow, nav
           </div>
         );
       })}
-      {selected.size > 0 && <BulkBar units={units} selected={selected} keep={keep} postpone={postpone} deleteNow={deleteNow} />}
+      {selected.size > 0 && (
+        <BulkBar
+          units={units}
+          selected={selected}
+          keep={keep}
+          postpone={postpone}
+          deleteNow={deleteNow}
+        />
+      )}
     </div>
   );
 }
@@ -317,7 +392,11 @@ function BulkBar({ units, selected, keep, postpone, deleteNow }: any) {
       <Button size="sm" onClick={() => chosen.forEach(postpone)}>
         Postpone +30d
       </Button>
-      <Button size="sm" variant="danger" onClick={() => chosen.forEach(deleteNow)}>
+      <Button
+        size="sm"
+        variant="danger"
+        onClick={() => chosen.forEach(deleteNow)}
+      >
         Delete now
       </Button>
     </div>

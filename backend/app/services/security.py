@@ -1,4 +1,5 @@
 """Password hashing for the local admin account (stdlib only)."""
+
 from __future__ import annotations
 
 import hashlib

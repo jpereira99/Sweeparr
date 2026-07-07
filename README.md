@@ -1,5 +1,7 @@
 # Sweeparr
 
+![CI](https://github.com/jpereira99/Sweeparr/actions/workflows/ci.yml/badge.svg)
+
 **Close the loop on your media library.** Request → Acquire → Watch → Age → **Warn → Remove.**
 
 Sweeparr is a single, lightweight, self-hosted microservice that watches your Jellyfin / Jellyseerr /
@@ -76,6 +78,15 @@ are configured. Saving an integration in **Settings** also triggers the relevant
 immediately.
 
 ## Quick start (Docker)
+
+Using the prebuilt image from GHCR (fastest — no build step):
+
+```bash
+cp .env.example .env      # set session secret + admin password at minimum
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+Or build from source:
 
 ```bash
 cp .env.example .env      # set session secret + admin password at minimum
@@ -229,7 +240,8 @@ frontend/
   src/pages/user/ KeepDeepLink (magic-link keep flow)
   src/components/ StatusPill · Shell · WhyPopover · Drawer · Toast · ui
 design/          design doc, original spec export, decode helpers (dev-only)
-Dockerfile · docker-compose.yml · .env.example · LICENSE
+.github/workflows/  CI (lint + build check) · publish (build & push to GHCR)
+Dockerfile · docker-compose.yml · docker-compose.ghcr.yml · .env.example · LICENSE
 ```
 
 ## Upgrading

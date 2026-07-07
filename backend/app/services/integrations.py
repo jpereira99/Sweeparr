@@ -1,4 +1,5 @@
 """Registry of integration adapters, built from DB-backed settings."""
+
 from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession

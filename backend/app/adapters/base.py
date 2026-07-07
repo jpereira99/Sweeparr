@@ -8,6 +8,7 @@ backoff + jitter, per-service rate limiting (semaphore), a circuit breaker
 Adapters degrade gracefully: if no base URL is configured they report
 ``configured=False`` and every read returns empty rather than crashing a job.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -34,7 +35,9 @@ class IntegrationAdapter:
     name = "base"
     api_key_header = "X-Api-Key"
 
-    def __init__(self, base_url: str, api_key: str, *, max_failures: int = 5, rate_limit: int = 8):
+    def __init__(
+        self, base_url: str, api_key: str, *, max_failures: int = 5, rate_limit: int = 8
+    ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         configured = bool(base_url and api_key)
@@ -68,18 +71,22 @@ class IntegrationAdapter:
                 try:
                     started = time.perf_counter()
                     async with httpx.AsyncClient(timeout=15.0) as client:
-                        resp = await client.request(method, url, headers=self._headers(), **kwargs)
+                        resp = await client.request(
+                            method, url, headers=self._headers(), **kwargs
+                        )
                     resp.raise_for_status()
                     self.health.ok = True
                     self.health.consecutive_failures = 0
                     self.health.detail = "ok"
                     self.health.latency_ms = int((time.perf_counter() - started) * 1000)
-                    if resp.content and "application/json" in resp.headers.get("content-type", ""):
+                    if resp.content and "application/json" in resp.headers.get(
+                        "content-type", ""
+                    ):
                         return resp.json()
                     return resp.text
                 except Exception as exc:  # noqa: BLE001
                     last_exc = exc
-                    await asyncio.sleep((2 ** attempt) * 0.25 + random.random() * 0.2)
+                    await asyncio.sleep((2**attempt) * 0.25 + random.random() * 0.2)
 
         # All retries failed — trip the breaker if we've crossed the threshold.
         self.health.ok = False

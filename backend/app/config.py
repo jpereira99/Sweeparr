@@ -5,6 +5,7 @@ environment / .env. Integration URLs and API keys are stored in the DB and
 managed through the Settings UI after first boot (env values seed the DB once).
 Operational toggles (system on/off, thresholds) live in the ``settings`` table.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -59,7 +60,10 @@ class Settings(BaseSettings):
     def integration_bootstrap(self) -> dict[str, dict[str, str]]:
         return {
             "jellyfin": {"url": self.jellyfin_url, "api_key": self.jellyfin_api_key},
-            "jellyseerr": {"url": self.jellyseerr_url, "api_key": self.jellyseerr_api_key},
+            "jellyseerr": {
+                "url": self.jellyseerr_url,
+                "api_key": self.jellyseerr_api_key,
+            },
             "sonarr": {"url": self.sonarr_url, "api_key": self.sonarr_api_key},
             "radarr": {"url": self.radarr_url, "api_key": self.radarr_api_key},
             "ntfy": {"url": self.ntfy_url, "api_key": "", "topic": self.ntfy_topic},
