@@ -251,25 +251,51 @@ export function Drawer({
               )}
             </div>
 
-            {!isSeries && data.state === "SCHEDULED" && (
-              <div className="flex gap-2 border-t border-line-subtle p-4">
-                <Button variant="keep" onClick={() => keepUnit(data, data.title)}>
-                  ✓ Keep
-                </Button>
-                <Button onClick={() => delayUnit(data, data.title)}>Delay</Button>
-                <Button
-                  variant="danger"
-                  onClick={async () => {
-                    if (!confirm(`Delete ${data.title} now?`)) return;
-                    await endpoints.deleteNow("movie", data.unit_id);
-                    toast("Delete requested");
-                    qc.invalidateQueries();
-                  }}
-                >
-                  Delete now
-                </Button>
-              </div>
-            )}
+            {!isSeries &&
+              (data.state === "ACTIVE" ||
+                data.state === "SCHEDULED" ||
+                data.state === "ERROR") && (
+                <div className="flex gap-2 border-t border-line-subtle p-4">
+                  <Button
+                    variant="keep"
+                    onClick={() => keepUnit(data, data.title)}
+                  >
+                    ✓ Keep
+                  </Button>
+                  {data.state === "SCHEDULED" && (
+                    <Button onClick={() => delayUnit(data, data.title)}>
+                      Delay
+                    </Button>
+                  )}
+                  <Button
+                    variant="danger"
+                    onClick={async () => {
+                      if (!confirm(`Delete ${data.title} now?`)) return;
+                      const res = await endpoints.deleteNow(
+                        "movie",
+                        data.unit_id,
+                      );
+                      const outcome = (res?.result?.results ?? []).find(
+                        (r: any) => r.unit === `movie:${data.unit_id}`,
+                      )?.result;
+                      if (outcome === "protected_at_execute") {
+                        toast(`${data.title} is still protected — not deleted`);
+                      } else if (outcome === "held_pending_keep") {
+                        toast(
+                          `${data.title} has a pending keep request — not deleted`,
+                        );
+                      } else if (outcome === "error") {
+                        toast(`Failed to delete ${data.title}`);
+                      } else {
+                        toast(`Deleted ${data.title}`);
+                      }
+                      qc.invalidateQueries();
+                    }}
+                  >
+                    Delete now
+                  </Button>
+                </div>
+              )}
             {!isSeries && data.state === "KEPT" && (
               <div className="flex gap-2 border-t border-line-subtle p-4">
                 <Button onClick={() => releaseUnit(data, data.title)}>
