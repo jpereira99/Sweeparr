@@ -37,16 +37,20 @@ class PreviewIn(BaseModel):
 
 class KeepIn(BaseModel):
     reason: Optional[str] = None
-    days: Optional[int] = 30  # None => forever
 
 
 class KeepDecision(BaseModel):
     reason: Optional[str] = None
-    days: Optional[int] = 60
 
 
-class PostponeIn(BaseModel):
-    days: int = 30
+class RestoreIn(BaseModel):
+    """A unit's prior lifecycle snapshot, replayed to undo a keep/delay."""
+
+    state: str
+    delete_at: Optional[str] = None
+    delay_until: Optional[str] = None
+    delay_count: int = 0
+    matched_rule_id: Optional[int] = None
 
 
 class DelayIn(BaseModel):

@@ -1,7 +1,8 @@
 """Auth: local admin account + Jellyfin credential pass-through.
 
 Login tries the local admin (password stored hashed in DB) first, then falls
-through to Jellyfin ``/Users/AuthenticateByName`` for Jellyfin administrators.
+through to Jellyfin ``/Users/AuthenticateByName``. Only Jellyfin administrators
+(or the local admin account) receive a session; other Jellyfin users get 403.
 """
 
 from __future__ import annotations
@@ -160,6 +161,16 @@ async def login(
         session.add(user)
     user.is_admin = is_admin
     await session.commit()
+
+    if not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Admin access required. This console is for Jellyfin administrators "
+                "only. Household members can request to keep or delay items from "
+                "Jellyfin banners — no Sweeparr login needed."
+            ),
+        )
 
     _set_session_cookie(response, user, is_local=False)
     return {"id": user.id, "name": user.name, "is_admin": user.is_admin}

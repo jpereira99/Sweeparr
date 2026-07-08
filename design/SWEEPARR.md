@@ -3,6 +3,8 @@
 
 > **v1.1 changes:** Name locked as **Sweeparr**. Per-season TV deletion promoted into v1. Confirmation model reworked: rules auto-schedule; the review surface is post-hoc QC, not an approval gate. Arr-tag mirroring confirmed as optional flag (off by default). Auth confirmed as Jellyfin credential pass-through (Jellyseerr-style) for all tiers.
 
+> **Superseded by the working implementation (Keep vs Delay):** This document predates the current build; where they disagree, the code wins. Two clarifications now in force: (1) **Keep is an indefinite, admin-gated protection-layer veto** — no expiry timers. A kept unit stays `KEPT` (off-limits to rules) until an admin explicitly **releases** it back to `ACTIVE`; the "keep for another 90 days" expiry idea in §6.3/§8 is dropped. (2) **Delay is a single capped, floor-setting scheduling-layer mechanism** shared by admins and users; the separate admin **postpone (+30d)** action in §12/§13 is retired and folded into Delay.
+
 ---
 
 ## 1. Vision

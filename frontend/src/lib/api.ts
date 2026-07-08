@@ -29,6 +29,17 @@ export const api = {
 
 const B = "/api/v1";
 
+// Captures a unit's lifecycle fields so a keep/delay can be undone via /restore.
+export function unitSnapshot(u: any) {
+  return {
+    state: u.state,
+    delete_at: u.delete_at ?? null,
+    delay_until: u.delay_until ?? null,
+    delay_count: u.delay_count ?? 0,
+    matched_rule_id: u.rule_id ?? null,
+  };
+}
+
 export const endpoints = {
   me: () => api.get(`${B}/auth/me`),
   login: (username: string, password: string) =>
@@ -53,10 +64,14 @@ export const endpoints = {
   disableRule: (id: number) => api.post(`${B}/rules/${id}/disable`),
   qc: (id: number) => api.get(`${B}/rules/${id}/qc`),
 
-  keepUnit: (t: string, id: number, b: unknown) =>
-    api.post(`${B}/units/${t}/${id}/keep`, b),
-  postpone: (t: string, id: number, days: number) =>
-    api.post(`${B}/units/${t}/${id}/postpone`, { days }),
+  keepUnit: (t: string, id: number, b?: unknown) =>
+    api.post(`${B}/units/${t}/${id}/keep`, b ?? {}),
+  release: (t: string, id: number) =>
+    api.post(`${B}/units/${t}/${id}/release`),
+  restore: (t: string, id: number, snapshot: unknown) =>
+    api.post(`${B}/units/${t}/${id}/restore`, snapshot),
+  delay: (t: string, id: number) => api.post(`${B}/units/${t}/${id}/delay`),
+  kept: () => api.get(`${B}/kept`),
   unschedule: (t: string, id: number) =>
     api.post(`${B}/units/${t}/${id}/unschedule`),
   deleteNow: (t: string, id: number) =>
@@ -68,8 +83,8 @@ export const endpoints = {
 
   keepRequests: (status = "pending") =>
     api.get(`${B}/keep-requests?status=${status}`),
-  approveKeep: (id: number, b: unknown) =>
-    api.post(`${B}/keep-requests/${id}/approve`, b),
+  approveKeep: (id: number, b?: unknown) =>
+    api.post(`${B}/keep-requests/${id}/approve`, b ?? {}),
   denyKeep: (id: number, b: unknown) =>
     api.post(`${B}/keep-requests/${id}/deny`, b),
 

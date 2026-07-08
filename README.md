@@ -204,15 +204,24 @@ list.
 ## Safety model in one paragraph
 
 Nothing is deleted the instant a rule matches. An **enabled** rule promotes matches to **SCHEDULED**
-with a grace countdown visible on the dashboard, in Jellyfin, and via notifications. Anyone can
-**Keep** during the window; a keep request pauses deletion until an admin decides. If self-service
-**delay** is enabled, users can instead push the removal date out themselves by a fixed number of
-days, up to a configurable number of times per item — no approval needed, and the rule engine's
-disk-pressure logic can never pull a delayed item's deletion date back in earlier than the delay. Only
-after the grace period — and only while the **system is running** — does `execute_deletions`
-re-verify protections and call Radarr/Sonarr. The whole path is logged, including every delay.
-Disabling a rule or pausing the system stops new scheduling; existing scheduled items can still be
-kept or manually unscheduled.
+with a grace countdown visible on the dashboard, in Jellyfin, and via notifications. Two levers act on
+a scheduled item, and they live on different layers:
+
+- **Keep** is a protection-layer veto: an admin (directly, or by approving a household keep request)
+  moves the unit to **KEPT** indefinitely, taking it out of the rule pipeline entirely. It stays kept
+  until an admin **releases** it, which returns it to `ACTIVE` for normal evaluation. A *pending* keep
+  request pauses deletion (execution hold) until the admin decides; a denied request simply leaves the
+  item on its existing schedule.
+- **Delay** is a scheduling-layer nudge: one capped, floor-setting mechanism shared by admins and
+  Jellyfin users (no approval). It pushes `delete_at` out by `delay_days`, up to `delay_max_count`
+  times, and the rule engine's disk-pressure logic can never pull a delayed item earlier than its
+  floor. A delayed item stays **SCHEDULED**, so if it gets watched and the rule stops matching, the
+  daily reconciliation self-heals it back to `ACTIVE`.
+
+Only after the grace period — and only while the **system is running** — does `execute_deletions`
+re-verify protections and call Radarr/Sonarr. The whole path is logged, including every keep, release,
+and delay. Disabling a rule or pausing the system stops new scheduling; existing scheduled items can
+still be kept, delayed, or manually unscheduled.
 
 ## API surface (selected)
 
@@ -220,8 +229,10 @@ kept or manually unscheduled.
 GET  /healthz                          liveness + integration health + system state
 GET  /api/v1/dashboard                 gauges, leaving-this-week, bytes-freed, health
 GET  /api/v1/schedule                  upcoming removals board
-POST /api/v1/units/{type}/{id}/keep    admin veto → KEPT
-POST /api/v1/keep-requests             household keep request (admin approves in UI)
+POST /api/v1/units/{type}/{id}/keep    admin veto → KEPT (indefinite)
+POST /api/v1/units/{type}/{id}/release admin unkeep → ACTIVE (re-enters evaluation)
+POST /api/v1/units/{type}/{id}/delay   admin delay (capped, sets floor; stays SCHEDULED)
+POST /api/v1/keep-requests             household keep request (admin approves → indefinite keep)
 POST /api/v1/delay/{token}             public, token-authed self-service delay (no approval, capped)
 GET  /api/v1/rules · POST /rules/preview   rules CRUD + stateless preview
 POST /api/v1/rules/{id}/enable|disable     turn a rule on or off

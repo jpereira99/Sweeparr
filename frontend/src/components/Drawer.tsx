@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { endpoints } from "../lib/api";
+import { endpoints, unitSnapshot } from "../lib/api";
 import { StatusPill } from "./StatusPill";
 import { Button, Poster } from "./ui";
 import { useToast } from "./Toast";
@@ -24,9 +24,36 @@ export function Drawer({
     queryFn: () => endpoints.mediaDetail(itemId),
   });
 
-  async function keepUnit(unit_type: string, unit_id: number, title: string) {
-    await endpoints.keepUnit(unit_type, unit_id, { days: 30 });
-    toast(`Kept ${title}`);
+  async function keepUnit(u: any, title: string) {
+    const before = unitSnapshot(u);
+    await endpoints.keepUnit(u.unit_type, u.unit_id);
+    toast(`Kept ${title}`, async () => {
+      await endpoints.restore(u.unit_type, u.unit_id, before);
+      qc.invalidateQueries();
+    });
+    qc.invalidateQueries();
+  }
+
+  async function delayUnit(u: any, title: string) {
+    const before = unitSnapshot(u);
+    try {
+      await endpoints.delay(u.unit_type, u.unit_id);
+      toast(`Delayed ${title}`, async () => {
+        await endpoints.restore(u.unit_type, u.unit_id, before);
+        qc.invalidateQueries();
+      });
+    } catch {
+      toast("Cannot delay");
+    }
+    qc.invalidateQueries();
+  }
+
+  async function releaseUnit(u: any, title: string) {
+    await endpoints.release(u.unit_type, u.unit_id);
+    toast(`Released ${title} — back to evaluation`, async () => {
+      await endpoints.keepUnit(u.unit_type, u.unit_id);
+      qc.invalidateQueries();
+    });
     qc.invalidateQueries();
   }
 
@@ -85,17 +112,33 @@ export function Drawer({
                     </span>
                     <StatusPill state={s.state} size="sm" date={s.delete_at} />
                     {s.state === "SCHEDULED" && (
+                      <>
+                        <button
+                          className="text-[10px] text-state-kept-ink"
+                          onClick={() =>
+                            keepUnit(s, `${data.title} S${s.season_number}`)
+                          }
+                        >
+                          Keep
+                        </button>
+                        <button
+                          className="text-[10px] text-ink-mid"
+                          onClick={() =>
+                            delayUnit(s, `${data.title} S${s.season_number}`)
+                          }
+                        >
+                          Delay
+                        </button>
+                      </>
+                    )}
+                    {s.state === "KEPT" && (
                       <button
-                        className="text-[10px] text-state-kept-ink"
+                        className="text-[10px] text-ink-mid"
                         onClick={() =>
-                          keepUnit(
-                            "season",
-                            s.unit_id,
-                            `${data.title} S${s.season_number}`,
-                          )
+                          releaseUnit(s, `${data.title} S${s.season_number}`)
                         }
                       >
-                        Keep
+                        Release
                       </button>
                     )}
                   </div>
@@ -210,12 +253,10 @@ export function Drawer({
 
             {!isSeries && data.state === "SCHEDULED" && (
               <div className="flex gap-2 border-t border-line-subtle p-4">
-                <Button
-                  variant="keep"
-                  onClick={() => keepUnit("movie", data.unit_id, data.title)}
-                >
+                <Button variant="keep" onClick={() => keepUnit(data, data.title)}>
                   ✓ Keep
                 </Button>
+                <Button onClick={() => delayUnit(data, data.title)}>Delay</Button>
                 <Button
                   variant="danger"
                   onClick={async () => {
@@ -226,6 +267,13 @@ export function Drawer({
                   }}
                 >
                   Delete now
+                </Button>
+              </div>
+            )}
+            {!isSeries && data.state === "KEPT" && (
+              <div className="flex gap-2 border-t border-line-subtle p-4">
+                <Button onClick={() => releaseUnit(data, data.title)}>
+                  Release — return to evaluation
                 </Button>
               </div>
             )}

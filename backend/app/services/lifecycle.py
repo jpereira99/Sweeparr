@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -164,27 +164,21 @@ async def protection_reasons(session: AsyncSession, unit: Unit) -> list[dict[str
             }
         )
 
-    kq = (
+    keeps = (
         (
             await session.execute(
-                select(KeepRequest).where(
-                    KeepRequest.unit_type == unit.type,
-                    KeepRequest.unit_id == unit.id,
-                    KeepRequest.status.in_(["approved", "pending"]),
+                select(Protection).where(
+                    Protection.unit_type == unit.type,
+                    Protection.unit_id == unit.id,
+                    Protection.kind == "keep",
                 )
             )
         )
         .scalars()
         .all()
     )
-    for k in kq:
-        if k.status == "pending":
-            reasons.append(
-                {"kind": "keep", "detail": "Keep request pending admin decision"}
-            )
-        elif k.expires_at is None or _aware(k.expires_at) > utcnow():
-            who = f"user #{k.user_id}" if k.user_id else "admin"
-            reasons.append({"kind": "keep", "detail": f"Kept by {who}"})
+    for k in keeps:
+        reasons.append({"kind": "keep", "detail": k.detail or "Kept by admin"})
     return reasons
 
 
@@ -369,7 +363,11 @@ async def _to_kept(
     session: AsyncSession, unit: Unit, rule: Optional[RuleSet], protections, actor: str
 ) -> None:
     obj = unit.obj
-    if obj.state in (LifecycleState.DELETING.value, LifecycleState.DELETED.value):
+    if obj.state in (
+        LifecycleState.DELETING.value,
+        LifecycleState.DELETED.value,
+        LifecycleState.KEPT.value,
+    ):
         return
     obj.state = LifecycleState.KEPT.value
     obj.delete_at = None
@@ -388,30 +386,33 @@ async def keep_unit(
     session: AsyncSession,
     unit: Unit,
     *,
-    days: Optional[int],
     actor: str,
     reason: str | None = None,
 ) -> None:
+    """Indefinite, admin-gated veto: pull the unit out of the rule pipeline.
+
+    Writes a ``keep`` Protection row (read by ``protection_reasons``) so the
+    unit stays off-limits to rules until an admin explicitly releases it.
+    """
     obj = unit.obj
     obj.state = LifecycleState.KEPT.value
     obj.delete_at = None
     obj.delay_until = None
     obj.delay_count = 0
-    expires = (utcnow() + timedelta(days=days)) if days else None
     session.add(
         Protection(
             unit_type=unit.type,
             unit_id=unit.id,
             kind="keep",
             detail=reason or f"kept by {actor}",
-            expires_at=expires,
+            expires_at=None,
         )
     )
     _audit(
         session,
         unit,
         "kept",
-        {"days": days, "reason": reason, "by": actor},
+        {"reason": reason, "by": actor},
         actor=actor,
     )
     await session.commit()
@@ -441,21 +442,69 @@ async def unschedule_unit(session: AsyncSession, unit: Unit, *, actor: str) -> N
     publish("unit_changed", {"key": unit.key, "state": obj.state})
 
 
-async def postpone_unit(
-    session: AsyncSession, unit: Unit, *, days: int, actor: str
-) -> None:
-    obj = unit.obj
-    base = _aware(obj.delete_at) if obj.delete_at else utcnow()
-    obj.delete_at = base + timedelta(days=days)
-    _audit(
-        session,
-        unit,
-        "postponed",
-        {"days": days, "by": actor, "delete_at": obj.delete_at.isoformat()},
-        actor=actor,
+async def release_unit(session: AsyncSession, unit: Unit, *, actor: str) -> None:
+    """Reverse a Keep: drop the keep protection and return the unit to ACTIVE.
+
+    The unit re-enters normal rule evaluation on the next cycle.
+    """
+    await session.execute(
+        delete(Protection).where(
+            Protection.unit_type == unit.type,
+            Protection.unit_id == unit.id,
+            Protection.kind == "keep",
+        )
     )
+    obj = unit.obj
+    obj.state = LifecycleState.ACTIVE.value
+    obj.delete_at = None
+    obj.matched_rule_id = None
+    obj.match_snapshot = None
+    obj.delay_until = None
+    obj.delay_count = 0
+    _audit(session, unit, "released", {"by": actor}, actor=actor)
     await session.commit()
-    publish("unit_changed", {"key": unit.key, "delete_at": obj.delete_at.isoformat()})
+    publish("unit_changed", {"key": unit.key, "state": obj.state})
+
+
+def _parse_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    return _aware(datetime.fromisoformat(value))
+
+
+async def restore_unit(
+    session: AsyncSession,
+    unit: Unit,
+    *,
+    state: str,
+    delete_at: str | None,
+    delay_until: str | None,
+    delay_count: int,
+    matched_rule_id: int | None,
+    actor: str,
+) -> None:
+    """Undo: restore a unit's prior lifecycle snapshot after a keep/delay.
+
+    When restoring to a non-KEPT state we drop any keep protection (this is the
+    reversal of a Keep); delays never add one, so the delete is a safe no-op.
+    """
+    if state != LifecycleState.KEPT.value:
+        await session.execute(
+            delete(Protection).where(
+                Protection.unit_type == unit.type,
+                Protection.unit_id == unit.id,
+                Protection.kind == "keep",
+            )
+        )
+    obj = unit.obj
+    obj.state = state
+    obj.delete_at = _parse_dt(delete_at)
+    obj.delay_until = _parse_dt(delay_until)
+    obj.delay_count = delay_count or 0
+    obj.matched_rule_id = matched_rule_id
+    _audit(session, unit, "restored", {"state": state, "by": actor}, actor=actor)
+    await session.commit()
+    publish("unit_changed", {"key": unit.key, "state": obj.state})
 
 
 async def delay_unit(
@@ -570,6 +619,22 @@ async def run_execute_deletions(
         )
         if rule and not rule.enabled and not force:
             continue
+
+        # Execution hold: a pending keep request pauses deletion until an admin
+        # decides. The unit stays SCHEDULED (visible, still counting down).
+        pending_keep = (
+            await session.execute(
+                select(KeepRequest).where(
+                    KeepRequest.unit_type == unit.type,
+                    KeepRequest.unit_id == unit.id,
+                    KeepRequest.status == "pending",
+                )
+            )
+        ).scalar_one_or_none()
+        if pending_keep is not None:
+            results.append({"unit": unit.key, "result": "held_pending_keep"})
+            continue
+
         obj.state = LifecycleState.DELETING.value
         await session.commit()
 

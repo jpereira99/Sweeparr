@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import timedelta, timezone
+from datetime import timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
@@ -218,15 +218,13 @@ async def approve(
     kr.status = "approved"
     kr.decided_by = principal.user_id
     kr.decided_at = utcnow()
-    kr.expires_at = (utcnow() + timedelta(days=body.days)) if body.days else None
     unit = await lifecycle.get_unit(session, kr.unit_type, kr.unit_id)
     if unit:
         await lifecycle.keep_unit(
             session,
             unit,
-            days=body.days,
             actor=principal.name,
-            reason=f"keep approved: {kr.reason or ''}",
+            reason=f"keep approved: {kr.reason or ''}".strip(),
         )
     await session.commit()
     return {"ok": True}

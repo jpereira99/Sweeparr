@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { endpoints } from "../lib/api";
+import { endpoints, unitSnapshot } from "../lib/api";
 import { PageHeader } from "./Dashboard";
 import {
   Card,
@@ -13,6 +13,15 @@ import { WhyPopover } from "../components/WhyPopover";
 import { StatusPill } from "../components/StatusPill";
 import { useToast } from "../components/Toast";
 import { gb } from "../lib/format";
+
+// A manual keep already reads "KEPT"; only non-keep protections need a suffix.
+const PROTECTION_LABEL: Record<string, string> = {
+  favorite: "favorite",
+  tag: "tag",
+  airing: "airing",
+  request_window: "requested",
+  unmanaged: "unmanaged",
+};
 
 export function QC() {
   const qc = useQueryClient();
@@ -38,14 +47,26 @@ export function QC() {
   });
 
   async function keep(m: any) {
-    await endpoints.keepUnit(m.unit_type, m.unit_id, { days: 30 });
-    toast(`Kept ${m.title}`);
+    const before = unitSnapshot(m);
+    await endpoints.keepUnit(m.unit_type, m.unit_id);
+    toast(`Kept ${m.title}`, async () => {
+      await endpoints.restore(m.unit_type, m.unit_id, before);
+      qc.invalidateQueries();
+    });
     qc.invalidateQueries();
   }
 
-  async function postpone(m: any) {
-    await endpoints.postpone(m.unit_type, m.unit_id, 30);
-    toast(`Postponed ${m.title} +30d`);
+  async function delay(m: any) {
+    const before = unitSnapshot(m);
+    try {
+      await endpoints.delay(m.unit_type, m.unit_id);
+      toast(`Delayed ${m.title}`, async () => {
+        await endpoints.restore(m.unit_type, m.unit_id, before);
+        qc.invalidateQueries();
+      });
+    } catch {
+      toast("Cannot delay");
+    }
     qc.invalidateQueries();
   }
 
@@ -183,7 +204,7 @@ export function QC() {
                       <StatusPill
                         state="KEPT"
                         size="sm"
-                        reason={m.protections?.[0]?.kind}
+                        reason={PROTECTION_LABEL[m.protections?.[0]?.kind]}
                       />
                     ) : (
                       <StatusPill state={m.state} size="sm" />
@@ -213,8 +234,8 @@ export function QC() {
                         >
                           ✓ Keep
                         </Button>
-                        <Button size="sm" onClick={() => postpone(m)}>
-                          +30d
+                        <Button size="sm" onClick={() => delay(m)}>
+                          Delay
                         </Button>
                       </>
                     )}

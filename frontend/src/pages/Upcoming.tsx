@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { endpoints } from "../lib/api";
+import { endpoints, unitSnapshot } from "../lib/api";
 import { PageHeader } from "./Dashboard";
 import { StatusPill } from "../components/StatusPill";
 import { WhyPopover } from "../components/WhyPopover";
@@ -30,16 +30,29 @@ export function Upcoming() {
   }, [data, typeFilter]);
 
   async function keep(u: any) {
-    await endpoints.keepUnit(u.unit_type, u.unit_id, { days: 30 });
-    toast(`Kept ${u.title} for 30 days`, async () => {
-      await endpoints.unschedule(u.unit_type, u.unit_id);
+    const before = unitSnapshot(u);
+    await endpoints.keepUnit(u.unit_type, u.unit_id);
+    toast(`Kept ${u.title}`, async () => {
+      await endpoints.restore(u.unit_type, u.unit_id, before);
       qc.invalidateQueries();
     });
     qc.invalidateQueries();
   }
-  async function postpone(u: any) {
-    await endpoints.postpone(u.unit_type, u.unit_id, 30);
-    toast(`Postponed ${u.title} +30d`);
+  async function delay(u: any) {
+    const before = unitSnapshot(u);
+    try {
+      const r = await endpoints.delay(u.unit_type, u.unit_id);
+      toast(
+        `Delayed ${u.title}` +
+          (r.delay_remaining != null ? ` · ${r.delay_remaining} left` : ""),
+        async () => {
+          await endpoints.restore(u.unit_type, u.unit_id, before);
+          qc.invalidateQueries();
+        },
+      );
+    } catch (e: any) {
+      toast(e?.message?.includes("cap") ? "Delay cap reached" : "Cannot delay");
+    }
     qc.invalidateQueries();
   }
   async function deleteNow(u: any) {
@@ -120,7 +133,7 @@ export function Upcoming() {
           selected={selected}
           setSelected={setSelected}
           keep={keep}
-          postpone={postpone}
+          delay={delay}
           deleteNow={deleteNow}
           navigate={navigate}
         />
@@ -277,7 +290,7 @@ function ListView({
   selected,
   setSelected,
   keep,
-  postpone,
+  delay,
   deleteNow,
   navigate,
 }: any) {
@@ -407,8 +420,8 @@ function ListView({
                   <Button size="sm" variant="keep" onClick={() => keep(u)}>
                     ✓ Keep
                   </Button>
-                  <Button size="sm" onClick={() => postpone(u)}>
-                    +30d
+                  <Button size="sm" onClick={() => delay(u)}>
+                    Delay
                   </Button>
                 </>
               )}
@@ -421,7 +434,7 @@ function ListView({
           units={units}
           selected={selected}
           keep={keep}
-          postpone={postpone}
+          delay={delay}
           deleteNow={deleteNow}
         />
       )}
@@ -429,7 +442,7 @@ function ListView({
   );
 }
 
-function BulkBar({ units, selected, keep, postpone, deleteNow }: any) {
+function BulkBar({ units, selected, keep, delay, deleteNow }: any) {
   const chosen = units.filter((u: any) => selected.has(u.key));
   return (
     <div className="flex items-center gap-3 border-t border-line-subtle bg-bg-raised px-6 py-3">
@@ -437,8 +450,8 @@ function BulkBar({ units, selected, keep, postpone, deleteNow }: any) {
       <Button size="sm" variant="keep" onClick={() => chosen.forEach(keep)}>
         ✓ Keep
       </Button>
-      <Button size="sm" onClick={() => chosen.forEach(postpone)}>
-        Postpone +30d
+      <Button size="sm" onClick={() => chosen.forEach(delay)}>
+        Delay
       </Button>
       <Button
         size="sm"

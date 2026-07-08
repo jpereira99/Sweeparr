@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { endpoints } from "../lib/api";
 
 const GROUPS: {
@@ -20,7 +20,7 @@ const GROUPS: {
     label: "AUTOMATE",
     items: [
       { to: "/rules", label: "Rules" },
-      { to: "/requests", label: "Keep Requests", badge: "keep" },
+      { to: "/requests", label: "Keeps", badge: "keep" },
     ],
   },
   {
@@ -57,6 +57,7 @@ export function GlobalBanner() {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
+  const qc = useQueryClient();
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: endpoints.me });
   const { data: dash } = useQuery({
     queryKey: ["dash-badge"],
@@ -74,11 +75,22 @@ export function Shell({ children }: { children: ReactNode }) {
   const badgeValue = (b?: string) =>
     b === "scheduled" ? scheduled : b === "keep" ? pendingKeeps : undefined;
 
+  async function logout() {
+    try {
+      await endpoints.logout();
+    } finally {
+      // Make the app immediately fall back to <Login />.
+      qc.setQueryData(["me"], null);
+      qc.invalidateQueries({ queryKey: ["me"] });
+      qc.invalidateQueries();
+    }
+  }
+
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <GlobalBanner />
-      <div className="flex flex-1">
-        <aside className="sticky top-0 flex h-screen w-[200px] flex-none flex-col gap-0.5 overflow-auto border-r border-line-subtle bg-bg-inset px-2.5 py-3">
+      <div className="flex min-h-0 flex-1">
+        <aside className="flex h-full w-[200px] flex-none flex-col gap-0.5 overflow-auto border-r border-line-subtle bg-bg-inset px-2.5 py-3">
           <div className="px-2 pb-3 pt-1 font-mono text-[13px] font-semibold text-ink-hi">
             ▚ SWEEPARR
           </div>
@@ -118,14 +130,21 @@ export function Shell({ children }: { children: ReactNode }) {
               })}
             </div>
           ))}
-          <div className="mt-auto flex items-center gap-2 px-2 pt-4 text-[11px] text-ink-faint">
-            <span className="flex h-6 w-6 items-center justify-center rounded-pill bg-line text-[10px] text-ink-mid">
+          <div className="mt-auto flex items-center gap-2 border-t border-line-subtle px-2 py-3 text-[11px] text-ink-faint">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-pill bg-line text-[10px] text-ink-mid">
               {(me?.name ?? "?")[0]?.toUpperCase()}
             </span>
-            <span>{me?.name}</span>
+            <span className="min-w-0 truncate text-ink-mid">{me?.name}</span>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="ml-auto shrink-0 text-ink-low transition-colors hover:text-ink-hi"
+            >
+              Log out
+            </button>
           </div>
         </aside>
-        <main className="min-w-0 flex-1 overflow-auto p-8">{children}</main>
+        <main className="min-h-0 min-w-0 flex-1 overflow-auto p-8">{children}</main>
       </div>
     </div>
   );
