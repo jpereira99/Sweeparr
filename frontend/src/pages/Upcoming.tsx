@@ -253,22 +253,33 @@ function CalendarView({ units }: { units: any[] }) {
                 >
                   {d.getDate()}
                 </span>
-                {isToday && (
+                {isToday ? (
                   <span className="text-[10px] text-ink-low">today</span>
+                ) : (
+                  items.length > 3 && (
+                    <span className="font-mono text-[9.5px] text-state-scheduled-ink">
+                      {items.length} leaving
+                    </span>
+                  )
                 )}
               </div>
               {items.slice(0, 3).map((u) => (
                 <div
                   key={u.key}
-                  className="truncate rounded border border-line-subtle bg-bg-raised px-1.5 py-1 text-[10px] text-ink-hi"
+                  className="flex items-center gap-1 overflow-hidden rounded border border-line-subtle bg-bg-raised px-1.5 py-1 text-[10px] text-ink-hi"
                 >
-                  {u.title}
-                  {u.season_number ? ` S${u.season_number}` : ""}
+                  <span className="truncate">{u.title}</span>
+                  {u.season_number ? (
+                    <span className="flex-none font-mono text-[9px] text-ink-low">
+                      S{u.season_number}
+                    </span>
+                  ) : null}
                 </div>
               ))}
               {items.length > 3 && (
                 <div className="mt-auto rounded bg-[rgba(229,72,77,0.1)] px-1 py-0.5 text-center font-mono text-[9.5px] text-state-scheduled-ink">
-                  +{items.length - 3} more
+                  +{items.length - 3} more ·{" "}
+                  {gb(items.reduce((a, x) => a + x.size_gb, 0))}
                 </div>
               )}
               {hasItems && items.length <= 3 && (
