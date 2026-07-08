@@ -144,10 +144,14 @@ async def media_detail(
     if not it:
         raise HTTPException(404, "Not found")
 
+    season_number_by_unit_id: dict[int, int] = {}
     if it.type == "movie":
         base = await serialize_movie(session, it)
         units = [lifecycle.Unit("movie", it, it)]
     else:
+        # Series-wide aggregate (the default "all seasons" overview); each
+        # season also carries its own stats for when one is selected.
+        facts = await session.get(ItemWatchFacts, it.id)
         base = {
             "media_item_id": it.id,
             "title": it.title,
@@ -155,17 +159,31 @@ async def media_detail(
             "type": "series",
             "series_status": it.series_status,
             "size_gb": round((it.size_bytes or 0) / GB, 1),
+            "last_watched_days": _last_watched_days(facts),
+            "total_plays": facts.total_plays if facts else 0,
+            "distinct_watchers": facts.distinct_watchers if facts else 0,
         }
         base["seasons"] = [
             await serialize_season(session, it, s)
             for s in sorted(it.seasons, key=lambda x: x.season_number)
         ]
         units = [lifecycle.Unit("season", s, it) for s in it.seasons]
+        season_number_by_unit_id = {s.id: s.season_number for s in it.seasons}
 
-    # Protections across the item's units.
+    # Protections across the item's units, tagged with the owning season so
+    # the drawer can filter down to one season instead of always showing
+    # the whole-series overview.
     protections = []
     for u in units:
-        protections += await lifecycle.protection_reasons(session, u)
+        for p in await lifecycle.protection_reasons(session, u):
+            protections.append(
+                {
+                    **p,
+                    "unit_type": u.type,
+                    "unit_id": u.id,
+                    "season_number": season_number_by_unit_id.get(u.id),
+                }
+            )
 
     reqs = (
         (await session.execute(select(Request).where(Request.media_item_id == item_id)))
@@ -209,6 +227,9 @@ async def media_detail(
             "ts": h.ts.replace(tzinfo=timezone.utc).isoformat(),
             "action": h.action,
             "actor": h.actor,
+            "unit_type": h.unit_type,
+            "unit_id": h.unit_id,
+            "season_number": season_number_by_unit_id.get(h.unit_id),
             "detail": h.detail,
         }
         for h in history

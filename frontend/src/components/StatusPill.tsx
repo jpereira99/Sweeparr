@@ -18,7 +18,7 @@ const ICON: Record<string, string> = {
 
 export function StatusPill({ state, size = "md", date, reason }: Props) {
   const h = size === "sm" ? "h-[18px] text-[9.5px]" : "h-[22px] text-[11px]";
-  const base = `inline-flex items-center gap-1.5 rounded-pill px-2.5 font-semibold tracking-[0.05em] ${h}`;
+  const base = `inline-flex items-center gap-1.5 rounded-pill px-2.5 font-semibold leading-none tracking-[0.05em] ${h}`;
   const icon = ICON[state] ?? "●";
 
   let cls = "";
@@ -64,8 +64,10 @@ export function StatusPill({ state, size = "md", date, reason }: Props) {
 
   return (
     <span className={`${base} ${cls}`} aria-label={aria}>
-      <span aria-hidden>{icon}</span>
-      {label}
+      <span aria-hidden className="inline-flex leading-none">
+        {icon}
+      </span>
+      <span className="leading-none">{label}</span>
     </span>
   );
 }
