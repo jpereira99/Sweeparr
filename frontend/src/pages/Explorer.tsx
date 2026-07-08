@@ -47,7 +47,7 @@ const COLUMNS: {
 ];
 
 const cols =
-  "grid-cols-[52px_minmax(160px,1.5fr)_minmax(96px,1fr)_minmax(56px,0.65fr)_minmax(52px,0.6fr)_minmax(64px,0.7fr)_minmax(72px,0.75fr)_minmax(72px,0.8fr)_minmax(100px,1.1fr)]";
+  "grid-cols-[92px_minmax(160px,1.5fr)_minmax(96px,1fr)_minmax(56px,0.65fr)_minmax(52px,0.6fr)_minmax(64px,0.7fr)_minmax(72px,0.75fr)_minmax(72px,0.8fr)_minmax(100px,1.1fr)]";
 const row = `col-span-full grid grid-cols-subgrid ${cols} gap-x-3 px-6`;
 
 export function Explorer() {
@@ -97,7 +97,7 @@ export function Explorer() {
       ) : (
         <div className="overflow-hidden rounded-lg border border-line bg-bg">
           <div className={`grid w-full ${cols}`}>
-            <div className={`${row} border-b border-line-subtle py-2`}>
+            <div className={`${row} items-center border-b border-line-subtle py-2`}>
               {COLUMNS.map((col) => (
                 <ColumnHeader
                   key={col.id}
@@ -132,7 +132,7 @@ export function Explorer() {
                     </span>
                   )}
                 </span>
-                <span className="font-mono text-[11.5px] text-ink-mid">
+                <span className="text-right font-mono text-[11.5px] text-ink-mid">
                   {relDays(it.last_watched_days)}
                 </span>
                 <span className="text-right font-mono text-[11.5px] text-ink-mid">
@@ -209,12 +209,12 @@ function ColumnHeader({
         type="button"
         onClick={onTypeFilter}
         title="Filter: All → Movies → TV"
-        className={`flex flex-col items-start gap-0.5 text-left transition-colors hover:text-ink-hi ${typeFilter !== "all" ? "text-accent" : "text-ink-low"}`}
+        className={`flex w-full items-center gap-1.5 text-left transition-colors hover:text-ink-hi ${typeFilter !== "all" ? "text-accent" : "text-ink-low"}`}
       >
         <span className="text-[10.5px] font-semibold tracking-[0.08em]">
           TYPE
         </span>
-        <span className="rounded border border-line px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.04em]">
+        <span className="rounded border border-line px-1 py-0.5 font-mono text-[9px] uppercase leading-none tracking-[0.04em]">
           {label} ▾
         </span>
       </button>

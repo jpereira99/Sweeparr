@@ -61,6 +61,13 @@ def _public_reason(snapshot: dict | None) -> str:
     return "Matched a removal rule"
 
 
+def _poster_url(item: MediaItem) -> str | None:
+    """Backend proxy path for the item's poster, when a Jellyfin id is known."""
+    if not item.jellyfin_id:
+        return None
+    return f"/api/v1/media/{item.id}/poster"
+
+
 async def serialize_movie(session: AsyncSession, item: MediaItem) -> dict[str, Any]:
     facts = await session.get(ItemWatchFacts, item.id)
     return {
@@ -69,6 +76,7 @@ async def serialize_movie(session: AsyncSession, item: MediaItem) -> dict[str, A
         "unit_id": item.id,
         "media_item_id": item.id,
         "title": item.title,
+        "poster_url": _poster_url(item),
         "year": item.year,
         "type": "movie",
         "library": item.library,
@@ -103,6 +111,7 @@ async def serialize_season(
         "unit_id": season.id,
         "media_item_id": item.id,
         "title": item.title,
+        "poster_url": _poster_url(item),
         "season_number": season.season_number,
         "type": "series",
         "library": item.library,

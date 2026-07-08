@@ -131,10 +131,9 @@ export function Upcoming() {
 
 function CalendarView({ units }: { units: any[] }) {
   const today = new Date();
-  const start = new Date(today);
-  const day = (start.getDay() + 6) % 7;
-  start.setDate(start.getDate() - day);
-  start.setHours(0, 0, 0, 0);
+  const [month, setMonth] = useState(
+    () => new Date(today.getFullYear(), today.getMonth(), 1),
+  );
 
   const byDay = new Map<string, any[]>();
   for (const u of units) {
@@ -144,9 +143,18 @@ function CalendarView({ units }: { units: any[] }) {
     byDay.get(key)!.push(u);
   }
 
-  const cells = Array.from({ length: 28 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
+  // Grid starts on the Monday on/before the 1st of the viewed month and spans
+  // whole weeks so the month is always complete.
+  const gridStart = new Date(month);
+  gridStart.setDate(1 - ((month.getDay() + 6) % 7));
+  gridStart.setHours(0, 0, 0, 0);
+  const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+  const leadingDays = (month.getDay() + 6) % 7;
+  const totalCells = Math.ceil((leadingDays + monthEnd.getDate()) / 7) * 7;
+
+  const cells = Array.from({ length: totalCells }, (_, i) => {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
     return d;
   });
   const maxCount = Math.max(
@@ -154,8 +162,42 @@ function CalendarView({ units }: { units: any[] }) {
     ...Array.from(byDay.values()).map((v) => v.length),
   );
 
+  const shiftMonth = (delta: number) =>
+    setMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1));
+  const monthLabel = month.toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+
   return (
     <div className="rounded-lg border border-line bg-bg p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <button
+          onClick={() => shiftMonth(-1)}
+          aria-label="Previous month"
+          className="flex h-7 w-7 items-center justify-center rounded border border-line text-ink-mid transition-colors hover:text-ink-hi"
+        >
+          ‹
+        </button>
+        <button
+          onClick={() => shiftMonth(1)}
+          aria-label="Next month"
+          className="flex h-7 w-7 items-center justify-center rounded border border-line text-ink-mid transition-colors hover:text-ink-hi"
+        >
+          ›
+        </button>
+        <span className="ml-1 text-[14px] font-semibold text-ink-hi">
+          {monthLabel}
+        </span>
+        <button
+          onClick={() =>
+            setMonth(new Date(today.getFullYear(), today.getMonth(), 1))
+          }
+          className="ml-auto rounded border border-line px-3 py-1 text-[12px] text-ink-mid transition-colors hover:text-ink-hi"
+        >
+          Today
+        </button>
+      </div>
       <div className="mb-1 grid grid-cols-7 gap-1.5">
         {["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map((d) => (
           <div
@@ -170,12 +212,13 @@ function CalendarView({ units }: { units: any[] }) {
         {cells.map((d, i) => {
           const items = byDay.get(d.toDateString()) ?? [];
           const isToday = d.toDateString() === today.toDateString();
+          const inMonth = d.getMonth() === month.getMonth();
           const hasItems = items.length > 0;
           const heat = Math.round((items.length / maxCount) * 100);
           return (
             <div
               key={i}
-              className="relative flex h-40 flex-col gap-1 overflow-hidden rounded-lg p-2"
+              className={`relative flex h-40 flex-col gap-1 overflow-hidden rounded-lg p-2 ${inMonth ? "" : "opacity-40"}`}
               style={{
                 background: hasItems ? "#0C0F16" : "#0A0D12",
                 border: isToday
@@ -291,7 +334,7 @@ function ListView({
                 />
               )}
             </span>
-            <Poster size={40} />
+            <Poster size={40} src={u.poster_url} />
             <span>
               <button
                 onClick={() => navigate("/library")}

@@ -58,35 +58,66 @@ export function History() {
           Actions taken by rules and admins are logged here.
         </EmptyState>
       ) : (
-        <div className="flex flex-col gap-1">
+        <div className="overflow-hidden rounded-lg border border-line bg-bg">
+          <div
+            className={`grid ${COLS} items-center gap-x-3 border-b border-line-subtle bg-bg-raised px-6 py-2`}
+          >
+            {["WHEN", "ACTION", "TITLE", "TYPE", "DETAIL", "ACTOR"].map(
+              (h, i) => (
+                <span
+                  key={h}
+                  className={`text-[10.5px] font-semibold tracking-[0.08em] text-ink-low ${i === 5 ? "text-right" : ""}`}
+                >
+                  {h}
+                </span>
+              ),
+            )}
+          </div>
           {entries.map((e: any, i: number) => (
             <div
               key={i}
-              className="flex items-center gap-3 rounded border border-line-subtle bg-bg px-3 py-2 font-mono text-[11px] text-ink-mid"
+              className={`grid ${COLS} items-center gap-x-3 border-b border-[#141A26] px-6 py-2 text-[11.5px]`}
             >
-              <span className="text-ink-low">{fmtDateTime(e.ts)}</span>
+              <span className="font-mono text-[11px] text-ink-low">
+                {fmtDateTime(e.ts)}
+              </span>
               <span
-                className={`font-semibold ${ACTION_COLOR[e.action] ?? "text-ink-mid"}`}
+                className={`font-mono font-semibold ${ACTION_COLOR[e.action] ?? "text-ink-mid"}`}
               >
                 {e.action}
               </span>
-              <span className="text-ink-hi">
-                {e.detail?.title ??
-                  e.detail?.rule ??
-                  `#${e.unit_id ?? e.media_item_id ?? ""}`}
+              <span className="truncate text-ink-hi">
+                {e.title ?? `#${e.unit_id ?? e.media_item_id ?? ""}`}
               </span>
-              {e.detail?.bytes_freed != null && (
-                <span className="text-ink-hi">
-                  {gb(e.detail.bytes_freed / 1024 ** 3)}
-                </span>
-              )}
-              {e.detail?.rule && (
-                <span className="text-ink-low">· rule: {e.detail.rule}</span>
-              )}
-              {e.detail?.by && (
-                <span className="text-ink-low">· by {e.detail.by}</span>
-              )}
-              <span className="ml-auto text-ink-faint">
+              <span className="font-mono text-[11px] uppercase text-ink-mid">
+                {e.unit_type === "season"
+                  ? "TV"
+                  : e.unit_type === "movie"
+                    ? "MOV"
+                    : "—"}
+              </span>
+              <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-ink-mid">
+                {e.detail?.bytes_freed != null && (
+                  <span className="font-mono text-ink-hi">
+                    {gb(e.detail.bytes_freed / 1024 ** 3)}
+                  </span>
+                )}
+                {e.detail?.rule && (
+                  <span className="text-ink-low">rule: {e.detail.rule}</span>
+                )}
+                {e.detail?.days != null && (
+                  <span className="text-ink-low">+{e.detail.days}d</span>
+                )}
+                {e.detail?.by && (
+                  <span className="text-ink-low">by {e.detail.by}</span>
+                )}
+                {e.detail?.error && (
+                  <span className="truncate text-state-error-ink">
+                    {e.detail.error}
+                  </span>
+                )}
+              </span>
+              <span className="text-right font-mono text-[11px] text-ink-faint">
                 {e.actor === "system" ? "system" : `user ${e.actor}`}
               </span>
             </div>
@@ -96,3 +127,6 @@ export function History() {
     </div>
   );
 }
+
+const COLS =
+  "grid-cols-[150px_100px_minmax(160px,1.4fr)_56px_minmax(140px,1.2fr)_120px]";

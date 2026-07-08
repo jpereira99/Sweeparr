@@ -43,6 +43,12 @@ export function QC() {
     qc.invalidateQueries();
   }
 
+  async function postpone(m: any) {
+    await endpoints.postpone(m.unit_type, m.unit_id, 30);
+    toast(`Postponed ${m.title} +30d`);
+    qc.invalidateQueries();
+  }
+
   const spark = data?.sparkline ?? [];
   const max = Math.max(1, ...spark.map((s: any) => s.count));
 
@@ -147,7 +153,7 @@ export function QC() {
             </EmptyState>
           ) : (
             <div className="overflow-hidden rounded-lg border border-line bg-bg">
-              <div className="grid grid-cols-[minmax(180px,1.4fr)_180px_100px_1fr_110px] gap-x-3 border-b border-line-subtle px-6 py-2">
+              <div className="grid grid-cols-[minmax(180px,1.4fr)_180px_100px_1fr_170px] gap-x-3 border-b border-line-subtle px-6 py-2">
                 {["TITLE", "STATE", "FREES", "SNAPSHOT", "ACTION"].map(
                   (h, i) => (
                     <span
@@ -162,7 +168,7 @@ export function QC() {
               {data.matches.map((m: any) => (
                 <div
                   key={m.key}
-                  className="grid grid-cols-[minmax(180px,1.4fr)_180px_100px_1fr_110px] items-center gap-x-3 border-b border-[#141A26] px-6 py-2"
+                  className="grid grid-cols-[minmax(180px,1.4fr)_180px_100px_1fr_170px] items-center gap-x-3 border-b border-[#141A26] px-6 py-2"
                 >
                   <span className="text-[13px] font-medium text-ink-hi">
                     {m.title}
@@ -197,11 +203,20 @@ export function QC() {
                       snapshot={m.snapshot}
                     />
                   </span>
-                  <span className="flex justify-end">
+                  <span className="flex justify-end gap-1.5">
                     {!m.protected && (
-                      <Button size="sm" variant="keep" onClick={() => keep(m)}>
-                        ✓ Keep
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="keep"
+                          onClick={() => keep(m)}
+                        >
+                          ✓ Keep
+                        </Button>
+                        <Button size="sm" onClick={() => postpone(m)}>
+                          +30d
+                        </Button>
+                      </>
                     )}
                   </span>
                 </div>

@@ -46,7 +46,7 @@ export function Drawer({
         ) : (
           <>
             <div className="flex items-start gap-3 border-b border-line-subtle p-5">
-              <Poster size={56} />
+              <Poster size={56} src={data.poster_url} />
               <div className="min-w-0 flex-1">
                 <div className="text-[16px] font-semibold text-ink-hi">
                   {data.title}

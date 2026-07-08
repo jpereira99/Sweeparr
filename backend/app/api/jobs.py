@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_session
-from ..models import AuditLog, JobRun
+from ..models import AuditLog, JobRun, MediaItem
 from ..services import scheduler
 from .auth import Principal, require_admin
 
@@ -78,6 +78,18 @@ async def history(
     if action:
         stmt = stmt.where(AuditLog.action == action)
     rows = (await session.execute(stmt)).scalars().all()
+
+    # Resolve real media titles once (audit rows never store a title).
+    item_ids = {r.media_item_id for r in rows if r.media_item_id is not None}
+    titles: dict[int, str] = {}
+    if item_ids:
+        for iid, title in (
+            await session.execute(
+                select(MediaItem.id, MediaItem.title).where(MediaItem.id.in_(item_ids))
+            )
+        ).all():
+            titles[iid] = title
+
     entries = [
         {
             "ts": r.ts.replace(tzinfo=timezone.utc).isoformat(),
@@ -86,6 +98,11 @@ async def history(
             "unit_type": r.unit_type,
             "unit_id": r.unit_id,
             "media_item_id": r.media_item_id,
+            "title": (
+                (r.detail or {}).get("title")
+                or titles.get(r.media_item_id)
+                or (r.detail or {}).get("rule")
+            ),
             "detail": r.detail,
         }
         for r in rows

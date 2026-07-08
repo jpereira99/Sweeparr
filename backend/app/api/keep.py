@@ -5,7 +5,7 @@ from __future__ import annotations
 import secrets
 from datetime import timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,7 @@ from ..schemas import DelayIn, KeepDecision, KeepIn
 from ..services import lifecycle
 from ..services.deeplink import read_unit_token
 from ..services.events import publish
+from ..services.integrations import get_integrations
 from ..services.runtime import all_settings
 from .auth import Principal, current_principal, require_admin
 from .serializers import _public_reason
@@ -91,6 +92,11 @@ async def _serialize_kr(session: AsyncSession, kr: KeepRequest) -> dict:
         "token": kr.token,
         "size_gb": size_gb,
         "reason_public": reason_public,
+        "poster_url": (
+            f"/api/v1/keep/{kr.token}/poster"
+            if unit and unit.item.jellyfin_id
+            else None
+        ),
         **await _action_options(session, unit),
     }
 
@@ -122,6 +128,9 @@ async def _serialize_unit_flag(
         "token": token,
         "size_gb": round(unit.size_bytes / 1e9, 1),
         "reason_public": _public_reason(getattr(unit.obj, "match_snapshot", None)),
+        "poster_url": (
+            f"/api/v1/keep/{token}/poster" if unit.item.jellyfin_id else None
+        ),
         **await _action_options(session, unit),
     }
 
@@ -346,6 +355,30 @@ async def _unit_from_keep_token(session: AsyncSession, token: str) -> lifecycle.
     if unit is None:
         raise HTTPException(404, "Unit not found")
     return unit
+
+
+@router.get("/keep/{token}/poster")
+async def keep_poster(
+    token: str,
+    max_width: int = Query(400, ge=32, le=1200),
+    session: AsyncSession = Depends(get_session),
+):
+    """Token-authenticated poster proxy for the public keep deep-link page."""
+    unit = await _unit_from_keep_token(session, token)
+    jellyfin_id = unit.item.jellyfin_id
+    if not jellyfin_id:
+        raise HTTPException(404, "No poster available")
+    result = await get_integrations().jellyfin.get_primary_image(
+        jellyfin_id, max_width=max_width
+    )
+    if result is None:
+        raise HTTPException(404, "No poster available")
+    content, content_type = result
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @router.post("/delay/{token}")

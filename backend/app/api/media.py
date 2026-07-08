@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -22,8 +22,14 @@ from ..models import (
     utcnow,
 )
 from ..services import lifecycle
+from ..services.integrations import get_integrations
 from .auth import Principal, require_admin
-from .serializers import _last_watched_days, serialize_movie, serialize_season
+from .serializers import (
+    _last_watched_days,
+    _poster_url,
+    serialize_movie,
+    serialize_season,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["media"])
 
@@ -77,6 +83,7 @@ async def list_media(
             {
                 "media_item_id": it.id,
                 "title": it.title,
+                "poster_url": _poster_url(it),
                 "type": it.type,
                 "year": it.year,
                 "library": it.library,
@@ -144,6 +151,7 @@ async def media_detail(
         base = {
             "media_item_id": it.id,
             "title": it.title,
+            "poster_url": _poster_url(it),
             "type": "series",
             "series_status": it.series_status,
             "size_gb": round((it.size_bytes or 0) / GB, 1),
@@ -207,3 +215,27 @@ async def media_detail(
     ]
 
     return {**base, "protections": protections, "requests": requests, "history": audit}
+
+
+@router.get("/media/{item_id}/poster")
+async def media_poster(
+    item_id: int,
+    max_width: int = Query(400, ge=32, le=1200),
+    session: AsyncSession = Depends(get_session),
+    _: Principal = Depends(require_admin),
+):
+    """Proxy an item's poster from Jellyfin so the browser needs no JF creds."""
+    it = await session.get(MediaItem, item_id)
+    if not it or not it.jellyfin_id:
+        raise HTTPException(404, "No poster available")
+    result = await get_integrations().jellyfin.get_primary_image(
+        it.jellyfin_id, max_width=max_width
+    )
+    if result is None:
+        raise HTTPException(404, "No poster available")
+    content, content_type = result
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )

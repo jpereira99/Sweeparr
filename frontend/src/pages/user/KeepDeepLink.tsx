@@ -128,8 +128,18 @@ export function KeepDeepLink() {
           </div>
         ) : (
           <>
-            <div className="poster-placeholder relative flex h-28 items-end">
-              <div className="w-full bg-gradient-to-t from-bg-inset to-transparent p-3.5">
+            <div className="poster-placeholder relative flex h-28 items-end overflow-hidden">
+              {data.poster_url && (
+                <img
+                  src={data.poster_url}
+                  alt=""
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              )}
+              <div className="relative w-full bg-gradient-to-t from-bg-inset to-transparent p-3.5">
                 <div className="text-[15px] font-semibold text-ink-hi">
                   {data.title}
                   {data.season_number ? ` — Season ${data.season_number}` : ""}
