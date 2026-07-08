@@ -77,6 +77,7 @@ async def list_media(
                         "season_number": s.season_number,
                         "state": s.state,
                         "size_gb": round((s.size_bytes or 0) / GB, 1),
+                        "delay_count": s.delay_count or 0,
                     }
                 )
         rows.append(
@@ -89,6 +90,7 @@ async def list_media(
                 "library": it.library,
                 "size_gb": size_gb,
                 "state": it.state,
+                "delay_count": it.delay_count or 0,
                 "last_watched_days": _last_watched_days(facts),
                 "total_plays": facts.total_plays if facts else 0,
                 "distinct_watchers": facts.distinct_watchers if facts else 0,

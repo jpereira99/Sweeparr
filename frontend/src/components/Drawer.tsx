@@ -9,10 +9,12 @@ import { fmtDate, fmtDateTime, gb, relDays } from "../lib/format";
 // Compact season-grid coloring — mirrors StatusPill's palette without the
 // text label, so dozens of seasons stay scannable instead of wrapping as
 // full pills.
-function seasonChipClasses(state: string): string {
+function seasonChipClasses(state: string, delayCount = 0): string {
   switch (state) {
     case "SCHEDULED":
-      return "bg-[rgba(229,72,77,0.14)] border-[rgba(229,72,77,0.4)] text-state-scheduled-ink";
+      return delayCount > 0
+        ? "bg-[rgba(217,168,60,0.14)] border-[rgba(217,168,60,0.4)] text-state-candidate-ink"
+        : "bg-[rgba(229,72,77,0.14)] border-[rgba(229,72,77,0.4)] text-state-scheduled-ink";
     case "KEPT":
       return "bg-[rgba(63,162,111,0.13)] border-[rgba(63,162,111,0.38)] text-state-kept-ink";
     case "DELETING":
@@ -137,6 +139,7 @@ export function Drawer({
                     state={data.state}
                     size="sm"
                     date={data.delete_at}
+                    delayCount={data.delay_count}
                   />
                 )}
               </div>
@@ -164,7 +167,11 @@ export function Drawer({
                   {data.seasons.map((s: any) => (
                     <button
                       key={s.unit_id}
-                      title={`S${s.season_number} · ${s.state}${
+                      title={`S${s.season_number} · ${
+                        s.state === "SCHEDULED" && s.delay_count > 0
+                          ? "DELAYED"
+                          : s.state
+                      }${
                         s.state === "SCHEDULED" && s.delete_at
                           ? " · " + fmtDate(s.delete_at)
                           : ""
@@ -178,6 +185,7 @@ export function Drawer({
                       }
                       className={`flex h-8 items-center justify-center rounded border font-mono text-[11px] font-semibold transition-colors ${seasonChipClasses(
                         s.state,
+                        s.delay_count,
                       )} ${
                         selectedSeason === s.season_number
                           ? "ring-2 ring-accent"
@@ -197,6 +205,7 @@ export function Drawer({
                       state={selectedSeasonData.state}
                       size="sm"
                       date={selectedSeasonData.delete_at}
+                      delayCount={selectedSeasonData.delay_count}
                     />
                   </div>
                 )}

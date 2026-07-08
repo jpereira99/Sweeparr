@@ -340,14 +340,19 @@ function ListView({ units, keep, delay, deleteNow, navigate }: any) {
                   ? ` · last watched ${u.last_watched_days}d ago`
                   : ""}
                 {u.delay_count > 0 ? (
-                  <span className="ml-1 text-state-scheduled-ink">
+                  <span className="ml-1 text-state-candidate-ink">
                     · delayed x{u.delay_count}
                   </span>
                 ) : null}
               </span>
             </span>
             <span className="flex items-center gap-1.5">
-              <StatusPill state={u.state} size="sm" date={u.delete_at} />
+              <StatusPill
+                state={u.state}
+                size="sm"
+                date={u.delete_at}
+                delayCount={u.delay_count}
+              />
               <WhyPopover ruleName={u.rule_name} snapshot={u.snapshot} />
             </span>
             <span>

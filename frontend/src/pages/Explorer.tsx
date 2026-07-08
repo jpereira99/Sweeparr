@@ -160,14 +160,24 @@ export function Explorer() {
                       {it.seasons.map((s: any) => (
                         <span
                           key={s.season_number}
-                          title={`S${s.season_number} · ${s.state}`}
+                          title={`S${s.season_number} · ${
+                            s.state === "SCHEDULED" && s.delay_count > 0
+                              ? "DELAYED"
+                              : s.state
+                          }`}
                           className="min-w-0 flex-1 rounded-sm"
-                          style={{ background: seasonColor(s.state) }}
+                          style={{
+                            background: seasonColor(s.state, s.delay_count),
+                          }}
                         />
                       ))}
                     </span>
                   ) : (
-                    <StatusPill state={it.state} size="sm" />
+                    <StatusPill
+                      state={it.state}
+                      size="sm"
+                      delayCount={it.delay_count}
+                    />
                   )}
                 </span>
               </div>
@@ -247,10 +257,10 @@ function ColumnHeader({
   );
 }
 
-function seasonColor(state: string) {
+function seasonColor(state: string, delayCount = 0) {
   switch (state) {
     case "SCHEDULED":
-      return "rgba(229,72,77,0.4)";
+      return delayCount > 0 ? "rgba(217,168,60,0.5)" : "rgba(229,72,77,0.4)";
     case "KEPT":
       return "rgba(63,162,111,0.3)";
     case "ERROR":

@@ -207,7 +207,11 @@ export function QC() {
                         reason={PROTECTION_LABEL[m.protections?.[0]?.kind]}
                       />
                     ) : (
-                      <StatusPill state={m.state} size="sm" />
+                      <StatusPill
+                        state={m.state}
+                        size="sm"
+                        delayCount={m.delay_count}
+                      />
                     )}
                   </span>
                   <span className="font-mono text-[12px] text-ink-hi">
