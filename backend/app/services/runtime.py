@@ -23,6 +23,7 @@ DEFAULTS: dict[str, Any] = {
     "airing_protects": True,
     "request_protection_days": 30,
     "leaving_soon_collection": True,
+    "jellyfin_inject_variant": "default",
 }
 
 

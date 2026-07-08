@@ -10,9 +10,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_session
-from ..models import KeepRequest, Season, User, utcnow
+from ..models import KeepRequest, LifecycleState, Season, User, utcnow
 from ..schemas import KeepDecision, KeepIn
 from ..services import lifecycle
+from ..services.deeplink import read_unit_token
 from ..services.events import publish
 from .auth import Principal, current_principal, require_admin
 from .serializers import _public_reason
@@ -60,6 +61,36 @@ async def _serialize_kr(session: AsyncSession, kr: KeepRequest) -> dict:
         "token": kr.token,
         "size_gb": size_gb,
         "reason_public": reason_public,
+    }
+
+
+async def _serialize_unit_flag(
+    session: AsyncSession, unit: lifecycle.Unit, token: str
+) -> dict:
+    season_number = (
+        getattr(unit.obj, "season_number", None) if unit.type == "season" else None
+    )
+    delete_at = _iso(unit.obj.delete_at)
+    days_until = None
+    if unit.obj.delete_at:
+        da = unit.obj.delete_at
+        da = da if da.tzinfo else da.replace(tzinfo=timezone.utc)
+        days_until = round((da - utcnow()).total_seconds() / 86400.0, 1)
+    return {
+        "id": None,
+        "unit_type": unit.type,
+        "unit_id": unit.id,
+        "title": unit.item.title,
+        "season_number": season_number,
+        "requester": None,
+        "reason": None,
+        "status": "pending",
+        "created_at": None,
+        "delete_at": delete_at,
+        "days_until": days_until,
+        "token": token,
+        "size_gb": round(unit.size_bytes / 1e9, 1),
+        "reason_public": _public_reason(getattr(unit.obj, "match_snapshot", None)),
     }
 
 
@@ -177,9 +208,8 @@ async def deny(
     return {"ok": True}
 
 
-@router.get("/keep/{token}")
-async def keep_by_token(token: str, session: AsyncSession = Depends(get_session)):
-    """Public-ish deep-link resolution for the Jellyfin banner (§8.2)."""
+async def _resolve_keep_token(session: AsyncSession, token: str) -> dict:
+    """Resolve a keep deep-link token to serialized payload or raise 404."""
     kr = (
         (await session.execute(select(KeepRequest).where(KeepRequest.token == token)))
         .scalars()
@@ -187,4 +217,71 @@ async def keep_by_token(token: str, session: AsyncSession = Depends(get_session)
     )
     if kr:
         return {"kind": "existing", **await _serialize_kr(session, kr)}
+
+    ref = read_unit_token(token)
+    if ref:
+        unit_type, unit_id = ref
+        unit = await lifecycle.get_unit(session, unit_type, unit_id)
+        if unit and unit.obj.state == LifecycleState.SCHEDULED.value:
+            existing = (
+                (
+                    await session.execute(
+                        select(KeepRequest)
+                        .where(
+                            KeepRequest.unit_type == unit_type,
+                            KeepRequest.unit_id == unit_id,
+                        )
+                        .order_by(KeepRequest.created_at.desc())
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            if existing:
+                return {"kind": "existing", **await _serialize_kr(session, existing)}
+            return {"kind": "new", **await _serialize_unit_flag(session, unit, token)}
+
     raise HTTPException(404, "Unknown keep token")
+
+
+@router.get("/keep/{token}")
+async def keep_by_token(token: str, session: AsyncSession = Depends(get_session)):
+    """Public-ish deep-link resolution for the Jellyfin banner (§8.2).
+
+    Two token shapes land here: the ``secrets.token_urlsafe`` id stored on a
+    KeepRequest once one exists, and the stateless per-unit token minted by
+    /flags before any request has been filed (see services/deeplink.py).
+    """
+    return await _resolve_keep_token(session, token)
+
+
+@router.post("/keep/{token}")
+async def submit_keep_by_token(
+    token: str,
+    body: KeepIn,
+    session: AsyncSession = Depends(get_session),
+):
+    """Token-authenticated keep submission for the Jellyfin inject modal.
+
+    The signed deep-link token is the capability — no Sweeparr session required.
+    """
+    data = await _resolve_keep_token(session, token)
+    if data.get("status") != "pending" or data.get("id") is not None:
+        return {"existing": True, **data}
+
+    unit = await lifecycle.get_unit(session, data["unit_type"], data["unit_id"])
+    if unit is None:
+        raise HTTPException(404, "Unit not found")
+
+    kr = KeepRequest(
+        unit_type=data["unit_type"],
+        unit_id=data["unit_id"],
+        user_id=None,
+        reason=body.reason,
+        status="pending",
+        token=secrets.token_urlsafe(12),
+    )
+    session.add(kr)
+    await session.commit()
+    publish("keep_request_created", {"unit": unit.key})
+    return {"existing": False, **await _serialize_kr(session, kr)}

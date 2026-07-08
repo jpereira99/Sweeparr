@@ -328,9 +328,49 @@ export function Settings() {
           <span className="font-mono">/flags</span> endpoint and fails silently
           on any DOM change.
         </p>
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-low">
+            Variant
+          </span>
+          <div className="flex gap-1">
+            {(["default", "tangy"] as const).map((variant) => {
+              const active =
+                (data.values?.jellyfin_inject_variant ?? "default") === variant;
+              return (
+                <Button
+                  key={variant}
+                  size="sm"
+                  variant={active ? "primary" : "ghost"}
+                  onClick={async () => {
+                    if (active) return;
+                    await endpoints.updateSettings({
+                      values: { jellyfin_inject_variant: variant },
+                    });
+                    toast(
+                      variant === "tangy"
+                        ? "TangyTheme snippet selected"
+                        : "Default snippet selected",
+                    );
+                    qc.invalidateQueries();
+                  }}
+                >
+                  {variant === "default" ? "Default" : "TangyTheme"}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+        <p className="mb-2 text-[11px] leading-relaxed text-ink-low">
+          Re-paste the snippet into Jellyfin&apos;s Custom JavaScript field when
+          you switch variants.
+        </p>
         <code className="block rounded border border-line-subtle bg-bg-inset px-3 py-2 font-mono text-[11.5px] text-ink-hi">
           &lt;script src="{`{sweeparr}`}
-          /static/inject/sweeparr.js"&gt;&lt;/script&gt;
+          /static/inject/
+          {(data.values?.jellyfin_inject_variant ?? "default") === "tangy"
+            ? "sweeparr-tangy.js"
+            : "sweeparr.js"}
+          "&gt;&lt;/script&gt;
         </code>
       </Card>
     </div>

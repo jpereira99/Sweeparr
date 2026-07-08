@@ -1,13 +1,11 @@
 /**
- * Sweeparr Jellyfin web-client injection (§8.2) — default variant.
+ * Sweeparr Jellyfin web-client injection (§8.2) — TangyTheme variant.
  *
- * Add this to Jellyfin via Dashboard → General → Custom CSS is not enough;
- * use the "custom JavaScript" index.html injection or a small plugin that
- * loads this file from:  {sweeparr}/static/inject/sweeparr.js
+ * Self-contained sibling of sweeparr.js. Use when TangyTheme (or Zesty fork)
+ * is installed via Dashboard → Branding → Custom CSS:
+ *   @import url('https://cdn.jsdelivr.net/gh/jpereira99/TangyTheme/theme.css');
  *
- * It observes SPA navigation, batches item ids to the public /flags endpoint,
- * and renders "Leaving <date>" badges on cards + a banner with a
- * "Request to keep" deep-link on detail pages.
+ * Load from:  {sweeparr}/static/inject/sweeparr-tangy.js
  *
  * Doctrine: it must fail SILENTLY and COMPLETELY. A broken selector across a
  * Jellyfin release must never break playback UI.
@@ -15,60 +13,162 @@
 (function () {
 	'use strict';
 
-	// Point this at your Sweeparr origin (through the Cloudflare Tunnel).
 	var SWEEPARR_ORIGIN = (window.SWEEPARR_ORIGIN || '').replace(/\/$/, '');
 	if (!SWEEPARR_ORIGIN) {
-		// Best-effort: same host, assume reverse-proxied. Users can override.
 		SWEEPARR_ORIGIN = '';
 	}
 
 	var cache = {};
-	var STYLE_ID = 'sweeparr-style';
+	var STYLE_ID = 'sweeparr-tangy-style';
 	var CARD_SELECTOR = '.card[data-id]';
+
+	// TangyTheme :root defaults — edit here; fallbacks in injectStyle() follow automatically.
+	var TANGY = {
+		white: '243,242,243',
+		cherryRed: '212,51,83',
+		darkest: '25,25,25',
+		accent: '255,255,255',
+		rounding: '12px',
+	};
+
+	function cssVar(name, fallback) {
+		return 'var(--' + name + ',' + fallback + ')';
+	}
 
 	function injectStyle() {
 		if (document.getElementById(STYLE_ID)) return;
 		var css =
-			'.swp-indicator{display:inline-flex;align-items:center;font:600 10px/1.2 sans-serif;' +
-			'color:#fff;background:#E5484D;border-radius:4px;padding:3px 6px;pointer-events:none;' +
-			'white-space:nowrap}' +
+			'.swp-indicator{display:inline-flex;align-items:center;' +
+			"font:700 10px/1.2 'indivisible',sans-serif;" +
+			'color:rgb(' +
+			cssVar('white', TANGY.white) +
+			');' +
+			'background:rgba(' +
+			cssVar('cherry-red', TANGY.cherryRed) +
+			',1);' +
+			'border-radius:' +
+			cssVar('rounding', TANGY.rounding) +
+			';padding:0.6em 0.6em;pointer-events:none;' +
+			'white-space:nowrap;box-shadow:-1px 1px 5px 1px rgba(' +
+			cssVar('darkest', TANGY.darkest) +
+			',.5)}' +
 			'.swp-indicator--ribbon{position:absolute;left:0;top:0;z-index:2;margin:0;' +
-			'font-weight:700;text-shadow:none}' +
-			'.swp-banner{display:flex;gap:12px;align-items:center;margin:0 0 12px;padding:10px 14px;' +
-			'border:1px solid rgba(229,72,77,.4);background:rgba(229,72,77,.12);border-radius:8px;' +
-			'color:#FF7B80;font:500 13px/1.4 sans-serif}' +
-			'.swp-banner button.swp-keep-btn{margin-left:auto;white-space:nowrap;border:0;border-radius:8px;' +
-			'padding:8px 12px;font:600 13px/1 sans-serif;cursor:pointer;color:#0d1f16;' +
-			'background:#5FC08D}' +
+			'border-radius:' +
+			cssVar('rounding', TANGY.rounding) +
+			' 0!important;text-shadow:none}' +
+			'.swp-banner{display:flex;gap:12px;align-items:center;' +
+			'margin:0 0 0.75em;padding:0.65em 0.9em;' +
+			'border:1px solid rgba(' +
+			cssVar('cherry-red', TANGY.cherryRed) +
+			',.75);' +
+			'background:rgba(' +
+			cssVar('cherry-red', TANGY.cherryRed) +
+			',.45);' +
+			'border-radius:' +
+			cssVar('rounding', TANGY.rounding) +
+			';' +
+			'color:rgb(' +
+			cssVar('white', TANGY.white) +
+			');' +
+			"font:600 13px/1.4 'indivisible',sans-serif;" +
+			'backdrop-filter:blur(5px)}' +
+			'.swp-banner button.swp-keep-btn{margin-left:auto;white-space:nowrap;border:0;border-radius:' +
+			cssVar('rounding', TANGY.rounding) +
+			';padding:0.45em 0.75em;font:600 13px/1 ' +
+			"'indivisible',sans-serif;cursor:pointer;color:rgb(" +
+			cssVar('darkest', TANGY.darkest) +
+			');background:rgba(' +
+			cssVar('accent', TANGY.accent) +
+			',.95)}' +
 			'.swp-modal-backdrop{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;' +
-			'justify-content:center;padding:16px;background:rgba(0,0,0,.72);backdrop-filter:blur(2px)}' +
+			'justify-content:center;padding:16px;background:rgba(' +
+			cssVar('darkest', TANGY.darkest) +
+			',.78);backdrop-filter:blur(5px)}' +
 			'.swp-modal{position:relative;width:100%;max-width:320px;max-height:min(90vh,560px);overflow:hidden;' +
-			'border:1px solid rgba(255,255,255,.1);border-radius:14px;background:#161616;color:#f2f2f2;' +
-			'font:500 13px/1.45 sans-serif;box-shadow:0 18px 48px rgba(0,0,0,.45)}' +
+			'border:1px solid rgba(' +
+			cssVar('white', TANGY.white) +
+			',.14);border-radius:' +
+			cssVar('rounding', TANGY.rounding) +
+			';background:rgb(' +
+			cssVar('darkest', TANGY.darkest) +
+			');color:rgb(' +
+			cssVar('white', TANGY.white) +
+			");font:600 13px/1.45 'indivisible',sans-serif;" +
+			'box-shadow:-1px 1px 12px 2px rgba(' +
+			cssVar('darkest', TANGY.darkest) +
+			',.65)}' +
 			'.swp-modal *,.swp-modal *::before,.swp-modal *::after{box-sizing:border-box}' +
 			'.swp-modal__close{position:absolute;top:8px;right:8px;z-index:1;border:0;background:transparent;' +
-			'color:#888;font:22px/1 sans-serif;cursor:pointer;padding:6px 8px;line-height:1}' +
+			'color:rgba(' +
+			cssVar('white', TANGY.white) +
+			',.55);font:22px/1 sans-serif;cursor:pointer;padding:6px 8px;line-height:1}' +
 			'.swp-modal__body{padding:18px 18px 20px}' +
-			'.swp-modal__title{margin:0 28px 2px 0;font:600 15px/1.3 sans-serif;color:#fff}' +
-			'.swp-modal__size{margin:0 0 10px;font:600 10.5px/1.2 monospace;color:#9a9a9a}' +
-			'.swp-modal__badge{display:inline-flex;align-items:center;gap:4px;margin:0 0 10px;padding:4px 10px;border-radius:999px;' +
-			'border:1px solid rgba(229,72,77,.4);background:rgba(229,72,77,.14);' +
-			'font:600 10.5px/1 sans-serif;color:#FF7B80;text-transform:uppercase;letter-spacing:.02em}' +
-			'.swp-modal__reason{margin:0;font:12px/1.45 sans-serif;color:#b8b8b8}' +
-			'.swp-modal__rule{height:1px;margin:12px 0;background:rgba(255,255,255,.08)}' +
-			'.swp-modal__label{display:block;margin:0 0 6px;font:11px/1.3 sans-serif;color:#7a7a7a}' +
-			'.swp-modal__meta{margin:0;font:12px/1.45 sans-serif;color:#b8b8b8}' +
+			'.swp-modal__title{margin:0 28px 2px 0;font:700 15px/1.3 ' +
+			"'indivisible',sans-serif;color:rgb(" +
+			cssVar('white', TANGY.white) +
+			')}' +
+			'.swp-modal__size{margin:0 0 10px;font:600 10.5px/1.2 ' +
+			"'indivisible',monospace;color:rgba(" +
+			cssVar('white', TANGY.white) +
+			',.62)}' +
+			'.swp-modal__badge{display:inline-flex;align-items:center;gap:4px;margin:0 0 10px;padding:0.35em 0.65em;border-radius:999px;' +
+			'border:1px solid rgba(' +
+			cssVar('cherry-red', TANGY.cherryRed) +
+			',.55);background:rgba(' +
+			cssVar('cherry-red', TANGY.cherryRed) +
+			',.32);font:700 10.5px/1 ' +
+			"'indivisible',sans-serif;color:rgb(" +
+			cssVar('white', TANGY.white) +
+			');text-transform:uppercase;letter-spacing:.02em}' +
+			'.swp-modal__reason{margin:0 0 0;font:12px/1.45 ' +
+			"'indivisible',sans-serif;color:rgba(" +
+			cssVar('white', TANGY.white) +
+			',.78)}' +
+			'.swp-modal__rule{height:1px;margin:12px 0;background:rgba(' +
+			cssVar('white', TANGY.white) +
+			',.12)}' +
+			'.swp-modal__label{display:block;margin:0 0 6px;font:11px/1.3 ' +
+			"'indivisible',sans-serif;color:rgba(" +
+			cssVar('white', TANGY.white) +
+			',.55)}' +
+			'.swp-modal__meta{margin:0;font:12px/1.45 ' +
+			"'indivisible',sans-serif;color:rgba(" +
+			cssVar('white', TANGY.white) +
+			',.78)}' +
 			'.swp-modal__title+.swp-modal__meta{margin-top:8px}' +
-			'.swp-modal__note{display:block;width:100%;min-height:64px;margin:0 0 12px;padding:10px;border-radius:8px;' +
-			'border:1px solid #333;background:#101010;color:#f2f2f2;font:12px/1.4 sans-serif;resize:none;outline:none}' +
-			'.swp-modal__note:focus{border-color:#5FC08D}' +
-			'.swp-modal__submit{display:block;width:100%;border:1px solid rgba(95,192,141,.5);border-radius:10px;padding:12px;' +
-			'font:600 14px/1 sans-serif;cursor:pointer;color:#5FC08D;background:rgba(95,192,141,.18)}' +
+			'.swp-modal__note{display:block;width:100%;min-height:64px;margin:0 0 12px;padding:10px;border-radius:' +
+			cssVar('rounding', TANGY.rounding) +
+			';border:1px solid rgba(' +
+			cssVar('white', TANGY.white) +
+			',.18);background:rgba(' +
+			cssVar('darkest', TANGY.darkest) +
+			',.65);color:rgb(' +
+			cssVar('white', TANGY.white) +
+			");font:12px/1.4 'indivisible',sans-serif;resize:none;outline:none}" +
+			'.swp-modal__note:focus{border-color:rgba(' +
+			cssVar('white', TANGY.white) +
+			',.35)}' +
+			'.swp-modal__submit{display:block;width:100%;border:0;border-radius:' +
+			cssVar('rounding', TANGY.rounding) +
+			';padding:12px;font:700 14px/1 ' +
+			"'indivisible',sans-serif;cursor:pointer;color:rgb(" +
+			cssVar('darkest', TANGY.darkest) +
+			');background:rgba(' +
+			cssVar('accent', TANGY.accent) +
+			',.95)}' +
 			'.swp-modal__submit:disabled{opacity:.65;cursor:wait}' +
-			'.swp-modal__hint{margin:12px 0 0;font:11px/1.4 sans-serif;color:#777;text-align:center}' +
+			'.swp-modal__hint{margin:12px 0 0;font:11px/1.4 ' +
+			"'indivisible',sans-serif;color:rgba(" +
+			cssVar('white', TANGY.white) +
+			',.5);text-align:center}' +
 			'.swp-modal__ok{display:flex;align-items:center;justify-content:center;width:44px;height:44px;' +
-			'margin:8px auto 12px;border-radius:999px;border:1px solid rgba(95,192,141,.45);' +
-			'background:rgba(95,192,141,.16);color:#5FC08D;font:20px/1 sans-serif}';
+			'margin:8px auto 12px;border-radius:999px;border:1px solid rgba(' +
+			cssVar('accent', TANGY.accent) +
+			',.45);background:rgba(' +
+			cssVar('accent', TANGY.accent) +
+			',.16);color:rgb(' +
+			cssVar('accent', TANGY.accent) +
+			');font:20px/1 sans-serif}';
 		var el = document.createElement('style');
 		el.id = STYLE_ID;
 		el.textContent = css;
@@ -78,10 +178,8 @@
 	function extractIds() {
 		var ids = {};
 		try {
-			// Detail page id from the URL hash (?id=...).
 			var m = (location.hash || '').match(/[?&]id=([a-f0-9]{32})/i);
 			if (m) ids[m[1]] = true;
-			// Card grid: Jellyfin scopes item cards as .card[data-id].
 			document.querySelectorAll(CARD_SELECTOR).forEach(function (n) {
 				var id = n.getAttribute('data-id');
 				if (id && /^[a-f0-9]{32}$/i.test(id)) ids[id] = true;
@@ -165,7 +263,7 @@
 		var backdrop = document.createElement('div');
 		backdrop.className = 'swp-modal-backdrop';
 		backdrop.innerHTML =
-			'<div class="swp-modal" role="dialog" aria-modal="true" aria-label="Request to keep">' +
+			'<div class="swp-modal" role="dialog" aria-modal="true" aria-label="Request to Keep">' +
 			'<button type="button" class="swp-modal__close" aria-label="Close">&times;</button>' +
 			'<div class="swp-modal__body">Loading…</div></div>';
 
@@ -198,10 +296,7 @@
 			})
 			.then(function (data) {
 				if (!data) {
-					renderKeepModalBody(
-						modal,
-						'<p class="swp-modal__meta">This link has expired or the item is no longer leaving.</p>'
-					);
+					renderKeepModalBody(modal, '<p class="swp-modal__meta">This link has expired or the item is no longer leaving.</p>');
 					return;
 				}
 				if (data.status !== 'pending' || data.id) {
@@ -211,7 +306,7 @@
 							'<p class="swp-modal__title">Request already sent</p>' +
 							'<p class="swp-modal__meta">' +
 							keepTitle(data) +
-							' stays put until an admin decides. Deletion is paused while your request is pending.</p>'
+							' stays put until an admin decides. Deletion is paused while your request is pending.</p>',
 					);
 					return;
 				}
@@ -221,9 +316,7 @@
 					'<p class="swp-modal__title">' +
 						keepTitle(data) +
 						'</p>' +
-						(data.size_gb != null
-							? '<p class="swp-modal__size">' + data.size_gb + ' GB</p>'
-							: '') +
+						(data.size_gb != null ? '<p class="swp-modal__size">' + data.size_gb + ' GB</p>' : '') +
 						'<span class="swp-modal__badge">⏱ Leaves ' +
 						fmt(data.delete_at) +
 						'</span>' +
@@ -233,7 +326,7 @@
 						'<div class="swp-modal__rule"></div>' +
 						'<label class="swp-modal__label">Add a note (optional)</label>' +
 						'<textarea class="swp-modal__note"></textarea>' +
-						'<button type="button" class="swp-modal__submit">✓ Request to keep</button>'
+						'<button type="button" class="swp-modal__submit">Request to Keep</button>',
 				);
 
 				var noteEl = modal.querySelector('.swp-modal__note');
@@ -255,7 +348,7 @@
 						.then(function (result) {
 							if (!result) {
 								submitBtn.disabled = false;
-								submitBtn.textContent = '✓ Request to keep';
+								submitBtn.textContent = 'Request to Keep';
 								return;
 							}
 							renderKeepModalBody(
@@ -265,19 +358,19 @@
 									'<p class="swp-modal__meta">' +
 									keepTitle(result) +
 									' stays put until an admin decides. Deletion is paused while your request is pending.</p>' +
-									'<p class="swp-modal__hint">Close this to return to Jellyfin.</p>'
+									'<p class="swp-modal__hint">Close this to return to Jellyfin.</p>',
 							);
 						})
 						.catch(function () {
 							submitBtn.disabled = false;
-							submitBtn.textContent = '✓ Request to keep';
+							submitBtn.textContent = 'Request to Keep';
 						});
 				});
 			})
 			.catch(function () {
 				renderKeepModalBody(
 					modal,
-					'<p class="swp-modal__meta">Could not reach Sweeparr. Check that it is running and reachable.</p>'
+					'<p class="swp-modal__meta">Could not reach Sweeparr. Check that it is running and reachable.</p>',
 				);
 			});
 	}
@@ -291,12 +384,11 @@
 		var banner = document.createElement('div');
 		banner.className = 'swp-banner';
 		var text = document.createElement('span');
-		text.textContent =
-			'Leaving ' + fmt(flag.delete_at) + ' — ' + (flag.reason_public || '');
+		text.textContent = 'Leaving ' + fmt(flag.delete_at) + ' — ' + (flag.reason_public || '');
 		var btn = document.createElement('button');
 		btn.type = 'button';
 		btn.className = 'swp-keep-btn';
-		btn.textContent = 'Request to keep';
+		btn.textContent = 'Request to Keep';
 		btn.addEventListener(
 			'click',
 			function (e) {
@@ -304,7 +396,7 @@
 				e.stopPropagation();
 				openKeepModal(flag);
 			},
-			true
+			true,
 		);
 		banner.appendChild(text);
 		banner.appendChild(btn);

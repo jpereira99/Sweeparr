@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { api, endpoints } from "../../lib/api";
+import { api } from "../../lib/api";
 import { fmtDate, gb } from "../../lib/format";
 
 // The mobile keep-request flow (§08): pre-authenticated to the item, one tap.
@@ -16,10 +16,8 @@ export function KeepDeepLink() {
   });
 
   async function submit() {
-    if (!data) return;
-    await endpoints.createKeepRequest(data.unit_type, data.unit_id, {
-      reason: note,
-    });
+    if (!data || !token) return;
+    await api.post(`/api/v1/keep/${token}`, { reason: note });
     setSent(true);
   }
 
