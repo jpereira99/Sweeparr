@@ -20,6 +20,9 @@ goes through the Sonarr/Radarr APIs so your `*arr` state stays consistent.
 - **Visible before destructive.** Everything appears on an *Upcoming Removals* board with a countdown
   and a one-tap **Keep** long before anything is deleted. The grace period *is* the safety model — no
   approval-gate friction, just an easy veto window.
+- **Two speeds of veto.** Admins choose whether household members can **request to keep** (admin
+  approves), self-service **delay** the removal by a fixed number of days (automatic, no queue, capped
+  per item), or both — whatever fits how hands-off you want to be.
 - **Preview before enable.** Rules are created **off**. The condition builder shows a live preview
   (full match list) with no side effects until you explicitly enable a rule.
 - **One system switch.** Pause the whole engine from Settings — no rules evaluate and nothing deletes
@@ -151,6 +154,9 @@ Managed in the admin **Settings** page and persisted in the `settings` table:
 
 - **Connections** — Jellyfin, Jellyseerr, Sonarr, Radarr, ntfy (test + save per service)
 - **System** — global on/off (`system_enabled`); when paused, no rules evaluate and nothing deletes
+- **Keep & delay options** — toggle household **keep requests** and self-service **delay**
+  independently, and set how many days each delay adds (`delay_days`) and how many times a single
+  item can be delayed (`delay_max_count`)
 - **Job schedules** — view next run time and manually trigger any sync or lifecycle job
 - **Account** — change local admin password
 
@@ -161,8 +167,10 @@ Managed in the admin **Settings** page and persisted in the `settings` table:
 | Local admin | Username + password from `.env` | Bootstrapped on first run; password changeable in Settings |
 | Jellyfin pass-through | Jellyfin admin users | Uses `/Users/AuthenticateByName`; requires Jellyfin configured |
 
-The admin console is the only authenticated UI. Household members can still **request to keep** media
-via magic links (`/keep/:token`) surfaced in Jellyfin inject banners — no separate login required.
+The admin console is the only authenticated UI. Household members can still **request to keep** or
+**self-delay** media via magic links (`/keep/:token`) surfaced in Jellyfin inject banners — no
+separate login required. Which of those two actions are offered (and for how many days) is controlled
+per-instance in **Settings → Keep & delay options**.
 
 ## Rules
 
@@ -188,17 +196,23 @@ list.
   ```
 
   It reads only public-safe fields from the cached `/flags` endpoint, renders a "Leaving <date>" pill
-  plus a dismissible banner with a one-tap **Request to keep** deep-link, and fails silently on any
-  Jellyfin DOM change.
+  plus a dismissible banner with **Request to keep** and/or **Delay N days** buttons (shown based on
+  what's enabled in Settings), and fails silently on any Jellyfin DOM change. Delaying is instant — no
+  admin approval, and no keep-request queue entry is created — while keep still routes through the
+  admin approval queue.
 
 ## Safety model in one paragraph
 
 Nothing is deleted the instant a rule matches. An **enabled** rule promotes matches to **SCHEDULED**
 with a grace countdown visible on the dashboard, in Jellyfin, and via notifications. Anyone can
-**Keep** during the window; a keep request pauses deletion until an admin decides. Only after the grace
-period — and only while the **system is running** — does `execute_deletions` re-verify protections
-and call Radarr/Sonarr. The whole path is logged. Disabling a rule or pausing the system stops new
-scheduling; existing scheduled items can still be kept or manually unscheduled.
+**Keep** during the window; a keep request pauses deletion until an admin decides. If self-service
+**delay** is enabled, users can instead push the removal date out themselves by a fixed number of
+days, up to a configurable number of times per item — no approval needed, and the rule engine's
+disk-pressure logic can never pull a delayed item's deletion date back in earlier than the delay. Only
+after the grace period — and only while the **system is running** — does `execute_deletions`
+re-verify protections and call Radarr/Sonarr. The whole path is logged, including every delay.
+Disabling a rule or pausing the system stops new scheduling; existing scheduled items can still be
+kept or manually unscheduled.
 
 ## API surface (selected)
 
@@ -208,6 +222,7 @@ GET  /api/v1/dashboard                 gauges, leaving-this-week, bytes-freed, h
 GET  /api/v1/schedule                  upcoming removals board
 POST /api/v1/units/{type}/{id}/keep    admin veto → KEPT
 POST /api/v1/keep-requests             household keep request (admin approves in UI)
+POST /api/v1/delay/{token}             public, token-authed self-service delay (no approval, capped)
 GET  /api/v1/rules · POST /rules/preview   rules CRUD + stateless preview
 POST /api/v1/rules/{id}/enable|disable     turn a rule on or off
 GET  /api/v1/rules/{id}/qc             rule quality-control diffs
@@ -248,7 +263,9 @@ Dockerfile · docker-compose.yml · docker-compose.ghcr.yml · .env.example · L
 
 Sweeparr runs lightweight SQLite migrations on startup (`db.py`). Existing databases from older
 versions are migrated automatically — legacy `CANDIDATE` units become `ACTIVE`, armed rules become
-`enabled`, and removed columns (`status`, `dry_run_since`) are dropped.
+`enabled`, removed columns (`status`, `dry_run_since`) are dropped, and `delay_until`/`delay_count`
+columns are added to media items and seasons to back the self-service delay feature (self-service
+delay itself stays off — `delay_enabled: false` — until an admin turns it on in Settings).
 
 ## License
 

@@ -24,6 +24,10 @@ DEFAULTS: dict[str, Any] = {
     "request_protection_days": 30,
     "leaving_soon_collection": True,
     "jellyfin_inject_variant": "default",
+    "keep_requests_enabled": True,
+    "delay_enabled": False,
+    "delay_days": 14,
+    "delay_max_count": 3,
 }
 
 

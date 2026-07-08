@@ -11,10 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_session
 from ..models import KeepRequest, LifecycleState, Season, User, utcnow
-from ..schemas import KeepDecision, KeepIn
+from ..schemas import DelayIn, KeepDecision, KeepIn
 from ..services import lifecycle
 from ..services.deeplink import read_unit_token
 from ..services.events import publish
+from ..services.runtime import all_settings
 from .auth import Principal, current_principal, require_admin
 from .serializers import _public_reason
 
@@ -23,6 +24,35 @@ router = APIRouter(prefix="/api/v1", tags=["keep"])
 
 def _iso(dt):
     return dt.replace(tzinfo=timezone.utc).isoformat() if dt else None
+
+
+async def _action_options(
+    session: AsyncSession, unit: lifecycle.Unit | None
+) -> dict:
+    """Which user actions (keep / delay) the client should offer for this unit."""
+    settings = await all_settings(session)
+    keep_enabled = bool(settings.get("keep_requests_enabled"))
+    delay_enabled = bool(settings.get("delay_enabled"))
+    delay_days = int(settings.get("delay_days") or 0)
+    max_count = int(settings.get("delay_max_count") or 0)
+
+    delay_count = 0
+    delay_until = None
+    scheduled = False
+    if unit is not None:
+        delay_count = getattr(unit.obj, "delay_count", 0) or 0
+        delay_until = _iso(getattr(unit.obj, "delay_until", None))
+        scheduled = unit.obj.state == LifecycleState.SCHEDULED.value
+    delay_remaining = max(0, max_count - delay_count)
+
+    return {
+        "allow_keep": keep_enabled,
+        "allow_delay": delay_enabled and scheduled and delay_remaining > 0,
+        "delay_days": delay_days,
+        "delay_count": delay_count,
+        "delay_remaining": delay_remaining,
+        "delay_until": delay_until,
+    }
 
 
 async def _serialize_kr(session: AsyncSession, kr: KeepRequest) -> dict:
@@ -61,6 +91,7 @@ async def _serialize_kr(session: AsyncSession, kr: KeepRequest) -> dict:
         "token": kr.token,
         "size_gb": size_gb,
         "reason_public": reason_public,
+        **await _action_options(session, unit),
     }
 
 
@@ -91,6 +122,7 @@ async def _serialize_unit_flag(
         "token": token,
         "size_gb": round(unit.size_bytes / 1e9, 1),
         "reason_public": _public_reason(getattr(unit.obj, "match_snapshot", None)),
+        **await _action_options(session, unit),
     }
 
 
@@ -129,6 +161,9 @@ async def create_keep_request(
     session: AsyncSession = Depends(get_session),
     principal: Principal = Depends(current_principal),
 ):
+    settings = await all_settings(session)
+    if not settings.get("keep_requests_enabled"):
+        raise HTTPException(403, "Keep requests are disabled")
     unit = await lifecycle.get_unit(session, unit_type, unit_id)
     if unit is None:
         raise HTTPException(404, "Unit not found")
@@ -265,6 +300,9 @@ async def submit_keep_by_token(
 
     The signed deep-link token is the capability — no Sweeparr session required.
     """
+    settings = await all_settings(session)
+    if not settings.get("keep_requests_enabled"):
+        raise HTTPException(403, "Keep requests are disabled")
     data = await _resolve_keep_token(session, token)
     if data.get("status") != "pending" or data.get("id") is not None:
         return {"existing": True, **data}
@@ -285,3 +323,60 @@ async def submit_keep_by_token(
     await session.commit()
     publish("keep_request_created", {"unit": unit.key})
     return {"existing": False, **await _serialize_kr(session, kr)}
+
+
+async def _unit_from_keep_token(session: AsyncSession, token: str) -> lifecycle.Unit:
+    """Resolve a signed unit token or an existing KeepRequest token to its unit."""
+    ref = read_unit_token(token)
+    if ref is None:
+        kr = (
+            (
+                await session.execute(
+                    select(KeepRequest).where(KeepRequest.token == token)
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if kr is not None:
+            ref = (kr.unit_type, kr.unit_id)
+    if ref is None:
+        raise HTTPException(404, "Unknown keep token")
+    unit = await lifecycle.get_unit(session, ref[0], ref[1])
+    if unit is None:
+        raise HTTPException(404, "Unit not found")
+    return unit
+
+
+@router.post("/delay/{token}")
+async def delay_by_token(
+    token: str,
+    body: DelayIn,
+    session: AsyncSession = Depends(get_session),
+):
+    """Automatic, token-authenticated self-service delay for the Jellyfin banner.
+
+    No admin approval and no keep-request row: it simply pushes the scheduled
+    deletion date out by the admin-configured number of days, capped per item.
+    """
+    settings = await all_settings(session)
+    if not settings.get("delay_enabled"):
+        raise HTTPException(403, "Delays are disabled")
+
+    unit = await _unit_from_keep_token(session, token)
+    if unit.obj.state != LifecycleState.SCHEDULED.value:
+        raise HTTPException(409, "This item is no longer scheduled for removal")
+
+    result = await lifecycle.delay_unit(
+        session,
+        unit,
+        days=int(settings.get("delay_days") or 0),
+        max_count=int(settings.get("delay_max_count") or 0),
+        actor="jellyfin user",
+        reason=body.reason,
+    )
+    if not result.get("ok") and result.get("reason") == "capped":
+        return {"ok": False, "capped": True, **await _resolve_keep_token(session, token)}
+    if not result.get("ok"):
+        raise HTTPException(409, "This item can no longer be delayed")
+    return {"ok": True, **result, **await _resolve_keep_token(session, token)}

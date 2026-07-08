@@ -9,6 +9,7 @@ const FILTERS: { id?: string; label: string }[] = [
   { id: undefined, label: "all" },
   { id: "deleted", label: "deletions" },
   { id: "kept", label: "keeps" },
+  { id: "delayed", label: "delays" },
   { id: "scheduled", label: "scheduled" },
   { id: "rule_disabled", label: "rule changes" },
 ];
@@ -16,6 +17,7 @@ const FILTERS: { id?: string; label: string }[] = [
 const ACTION_COLOR: Record<string, string> = {
   deleted: "text-state-muted",
   kept: "text-state-kept-ink",
+  delayed: "text-state-scheduled-ink",
   scheduled: "text-state-scheduled-ink",
   rule_disabled: "text-ink-mid",
   error: "text-state-error-ink",

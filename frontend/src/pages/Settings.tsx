@@ -27,6 +27,10 @@ export function Settings() {
     Record<string, { url: string; api_key: string; topic?: string }>
   >({});
   const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
+  const [delayDraft, setDelayDraft] = useState<{
+    days?: number;
+    max?: number;
+  }>({});
 
   async function test(svc: string) {
     setTesting(svc);
@@ -74,6 +78,12 @@ export function Settings() {
   async function toggleSystem(on: boolean) {
     await endpoints.updateSettings({ system_enabled: on });
     toast(on ? "System running" : "System paused");
+    qc.invalidateQueries();
+  }
+
+  async function saveValues(patch: Record<string, unknown>, msg: string) {
+    await endpoints.updateSettings({ values: patch });
+    toast(msg);
     qc.invalidateQueries();
   }
 
@@ -319,6 +329,113 @@ export function Settings() {
           </Card>
         </div>
       </div>
+
+      <Card className="mt-4">
+        <SectionLabel>Keep &amp; delay options (§8)</SectionLabel>
+        <p className="mb-3 text-[12px] leading-relaxed text-ink-mid">
+          Choose what Jellyfin users can do from the &quot;Leaving soon&quot;
+          banner. A keep request waits for your approval on the Keep Requests
+          page; a delay is automatic and simply pushes the removal date out.
+        </p>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between rounded border border-line-subtle bg-bg-inset p-3">
+            <div>
+              <div className="text-[12px] font-medium text-ink-hi">
+                Allow keep requests
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-ink-low">
+                Users can ask an admin to keep an item; deletion pauses until
+                you decide.
+              </p>
+            </div>
+            <Toggle
+              on={data.values?.keep_requests_enabled ?? true}
+              onChange={(on) =>
+                saveValues(
+                  { keep_requests_enabled: on },
+                  on ? "Keep requests enabled" : "Keep requests disabled",
+                )
+              }
+            />
+          </div>
+          <div className="flex items-center justify-between rounded border border-line-subtle bg-bg-inset p-3">
+            <div>
+              <div className="text-[12px] font-medium text-ink-hi">
+                Allow self-service delay
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-ink-low">
+                Users can push the removal date out themselves, no approval
+                needed.
+              </p>
+            </div>
+            <Toggle
+              on={data.values?.delay_enabled ?? false}
+              onChange={(on) =>
+                saveValues(
+                  { delay_enabled: on },
+                  on ? "Delay enabled" : "Delay disabled",
+                )
+              }
+            />
+          </div>
+          <div className="rounded border border-line-subtle bg-bg-inset p-3">
+            <div className="flex flex-wrap items-end gap-4">
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-low">
+                  Days per delay
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={delayDraft.days ?? data.values?.delay_days ?? 14}
+                  onChange={(e) =>
+                    setDelayDraft((s) => ({
+                      ...s,
+                      days: Number(e.target.value),
+                    }))
+                  }
+                  className="h-8 w-24 rounded border border-line bg-bg px-2 font-mono text-[11px] text-ink-hi outline-none focus:border-accent"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-low">
+                  Max delays per item
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={delayDraft.max ?? data.values?.delay_max_count ?? 3}
+                  onChange={(e) =>
+                    setDelayDraft((s) => ({
+                      ...s,
+                      max: Number(e.target.value),
+                    }))
+                  }
+                  className="h-8 w-24 rounded border border-line bg-bg px-2 font-mono text-[11px] text-ink-hi outline-none focus:border-accent"
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={async () => {
+                  await saveValues(
+                    {
+                      delay_days:
+                        delayDraft.days ?? data.values?.delay_days ?? 14,
+                      delay_max_count:
+                        delayDraft.max ?? data.values?.delay_max_count ?? 3,
+                    },
+                    "Delay settings saved",
+                  );
+                  setDelayDraft({});
+                }}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       <Card className="mt-4">
         <SectionLabel>Jellyfin inject script (§8.2)</SectionLabel>

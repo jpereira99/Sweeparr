@@ -49,6 +49,10 @@ class PostponeIn(BaseModel):
     days: int = 30
 
 
+class DelayIn(BaseModel):
+    reason: Optional[str] = None
+
+
 class LoginIn(BaseModel):
     username: str
     password: str

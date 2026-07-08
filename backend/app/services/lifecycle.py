@@ -265,6 +265,8 @@ async def run_evaluate_rules(session: AsyncSession) -> dict[str, Any]:
                 obj.delete_at = utcnow() + timedelta(days=grace)
                 obj.matched_rule_id = rule.id
                 obj.match_snapshot = m["snapshot"]
+                obj.delay_until = None
+                obj.delay_count = 0
                 scheduled += 1
                 _audit(
                     session,
@@ -288,6 +290,10 @@ async def run_evaluate_rules(session: AsyncSession) -> dict[str, Any]:
                 and obj.matched_rule_id == rule.id
             ):
                 new_at = utcnow() + timedelta(days=grace)
+                # A user-set delay is a hard floor: never pull deletion earlier.
+                floor = _aware(obj.delay_until) if obj.delay_until else None
+                if floor and new_at < floor:
+                    new_at = floor
                 if obj.delete_at and new_at < _aware(obj.delete_at):
                     obj.delete_at = new_at
                     _audit(
@@ -336,6 +342,8 @@ async def _demote_stale(
                 obj.delete_at = None
                 obj.matched_rule_id = None
                 obj.match_snapshot = None
+                obj.delay_until = None
+                obj.delay_count = 0
 
 
 def _audit(
@@ -365,6 +373,8 @@ async def _to_kept(
         return
     obj.state = LifecycleState.KEPT.value
     obj.delete_at = None
+    obj.delay_until = None
+    obj.delay_count = 0
     detail = {"reasons": protections}
     if rule:
         detail["rule"] = rule.name
@@ -385,6 +395,8 @@ async def keep_unit(
     obj = unit.obj
     obj.state = LifecycleState.KEPT.value
     obj.delete_at = None
+    obj.delay_until = None
+    obj.delay_count = 0
     expires = (utcnow() + timedelta(days=days)) if days else None
     session.add(
         Protection(
@@ -422,6 +434,8 @@ async def unschedule_unit(session: AsyncSession, unit: Unit, *, actor: str) -> N
     obj.state = LifecycleState.ACTIVE.value
     obj.delete_at = None
     obj.matched_rule_id = None
+    obj.delay_until = None
+    obj.delay_count = 0
     _audit(session, unit, "unscheduled", {"by": actor}, actor=actor)
     await session.commit()
     publish("unit_changed", {"key": unit.key, "state": obj.state})
@@ -442,6 +456,63 @@ async def postpone_unit(
     )
     await session.commit()
     publish("unit_changed", {"key": unit.key, "delete_at": obj.delete_at.isoformat()})
+
+
+async def delay_unit(
+    session: AsyncSession,
+    unit: Unit,
+    *,
+    days: int,
+    max_count: int,
+    actor: str,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Self-service delay: push delete_at forward by ``days`` and pin a hard floor.
+
+    Stays SCHEDULED (no admin approval, no keep-request row). Capped to
+    ``max_count`` delays per scheduled window. Returns a result dict; the unit is
+    only mutated when ``ok`` is True.
+    """
+    obj = unit.obj
+    if obj.state != LifecycleState.SCHEDULED.value:
+        return {"ok": False, "reason": "not_scheduled"}
+    if (obj.delay_count or 0) >= max_count:
+        return {
+            "ok": False,
+            "reason": "capped",
+            "delay_count": obj.delay_count or 0,
+            "delay_remaining": 0,
+        }
+
+    base = _aware(obj.delete_at) if obj.delete_at else utcnow()
+    if base < utcnow():
+        base = utcnow()
+    new_at = base + timedelta(days=days)
+    obj.delete_at = new_at
+    obj.delay_until = new_at
+    obj.delay_count = (obj.delay_count or 0) + 1
+    remaining = max(0, max_count - obj.delay_count)
+    _audit(
+        session,
+        unit,
+        "delayed",
+        {
+            "days": days,
+            "count": obj.delay_count,
+            "delete_at": new_at.isoformat(),
+            "reason": reason,
+            "by": actor,
+        },
+        actor=actor,
+    )
+    await session.commit()
+    publish("unit_changed", {"key": unit.key, "delete_at": new_at.isoformat()})
+    return {
+        "ok": True,
+        "delete_at": new_at.isoformat(),
+        "delay_count": obj.delay_count,
+        "delay_remaining": remaining,
+    }
 
 
 # --------------------------------------------------------------------------- #

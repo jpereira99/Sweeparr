@@ -63,6 +63,8 @@ export const endpoints = {
     api.post(`${B}/units/${t}/${id}/delete-now`),
   createKeepRequest: (t: string, id: number, b: unknown) =>
     api.post(`${B}/units/${t}/${id}/keep-request`, b),
+  delayByToken: (token: string, b?: unknown) =>
+    api.post(`${B}/delay/${token}`, b ?? {}),
 
   keepRequests: (status = "pending") =>
     api.get(`${B}/keep-requests?status=${status}`),

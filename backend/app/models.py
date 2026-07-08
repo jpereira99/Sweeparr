@@ -106,6 +106,9 @@ class MediaItem(Base):
         ForeignKey("rule_set.id"), nullable=True
     )
     match_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Self-service delay: hard floor for delete_at + count within the window.
+    delay_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delay_count: Mapped[int] = mapped_column(Integer, default=0)
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utcnow, onupdate=utcnow
@@ -143,6 +146,9 @@ class Season(Base):
         ForeignKey("rule_set.id"), nullable=True
     )
     match_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Self-service delay: hard floor for delete_at + count within the window.
+    delay_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delay_count: Mapped[int] = mapped_column(Integer, default=0)
 
     media_item: Mapped[MediaItem] = relationship(back_populates="seasons")
     facts: Mapped["SeasonWatchFacts | None"] = relationship(

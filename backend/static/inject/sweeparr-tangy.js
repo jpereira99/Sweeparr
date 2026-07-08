@@ -157,6 +157,13 @@
 			cssVar('accent', TANGY.accent) +
 			',.95)}' +
 			'.swp-modal__submit:disabled{opacity:.65;cursor:wait}' +
+			'.swp-modal__delay{margin-bottom:10px;border:1px solid rgba(' +
+			cssVar('cherry-red', TANGY.cherryRed) +
+			',.75);color:rgb(' +
+			cssVar('white', TANGY.white) +
+			');background:rgba(' +
+			cssVar('cherry-red', TANGY.cherryRed) +
+			',.45)}' +
 			'.swp-modal__hint{margin:12px 0 0;font:11px/1.4 ' +
 			"'indivisible',sans-serif;color:rgba(" +
 			cssVar('white', TANGY.white) +
@@ -311,6 +318,22 @@
 					return;
 				}
 
+				var canKeep = !!data.allow_keep;
+				var canDelay = !!data.allow_delay;
+				var actionsHtml = '';
+				if (canDelay) {
+					actionsHtml +=
+						'<button type="button" class="swp-modal__submit swp-modal__delay">⏱ Delay ' +
+						(data.delay_days || 0) +
+						' days</button>';
+				}
+				if (canKeep) {
+					actionsHtml += '<button type="button" class="swp-modal__submit swp-modal__keep">Request to Keep</button>';
+				}
+				if (!canKeep && !canDelay) {
+					actionsHtml += '<p class="swp-modal__meta">Reach out to your admin to keep this item.</p>';
+				}
+
 				renderKeepModalBody(
 					modal,
 					'<p class="swp-modal__title">' +
@@ -324,48 +347,119 @@
 						(data.reason_public || '') +
 						'</p>' +
 						'<div class="swp-modal__rule"></div>' +
-						'<label class="swp-modal__label">Add a note (optional)</label>' +
-						'<textarea class="swp-modal__note"></textarea>' +
-						'<button type="button" class="swp-modal__submit">Request to Keep</button>',
+						(canKeep || canDelay
+							? '<label class="swp-modal__label">Add a note (optional)</label>' +
+								'<textarea class="swp-modal__note"></textarea>'
+							: '') +
+						actionsHtml,
 				);
 
 				var noteEl = modal.querySelector('.swp-modal__note');
-				var submitBtn = modal.querySelector('.swp-modal__submit');
-				submitBtn.addEventListener('click', function (e) {
-					e.preventDefault();
-					e.stopPropagation();
-					submitBtn.disabled = true;
-					submitBtn.textContent = 'Sending…';
-					fetch(SWEEPARR_ORIGIN + '/api/v1/keep/' + encodeURIComponent(token), {
-						method: 'POST',
-						credentials: 'omit',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ reason: noteEl ? noteEl.value : '' }),
-					})
-						.then(function (r) {
-							return r.ok ? r.json() : null;
+				var keepBtn = modal.querySelector('.swp-modal__keep');
+				var delayBtn = modal.querySelector('.swp-modal__delay');
+
+				function note() {
+					return noteEl ? noteEl.value : '';
+				}
+
+				if (keepBtn) {
+					keepBtn.addEventListener('click', function (e) {
+						e.preventDefault();
+						e.stopPropagation();
+						keepBtn.disabled = true;
+						if (delayBtn) delayBtn.disabled = true;
+						keepBtn.textContent = 'Sending…';
+						fetch(SWEEPARR_ORIGIN + '/api/v1/keep/' + encodeURIComponent(token), {
+							method: 'POST',
+							credentials: 'omit',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ reason: note() }),
 						})
-						.then(function (result) {
-							if (!result) {
-								submitBtn.disabled = false;
-								submitBtn.textContent = 'Request to Keep';
-								return;
-							}
-							renderKeepModalBody(
-								modal,
-								'<div class="swp-modal__ok">✓</div>' +
-									'<p class="swp-modal__title">Request sent</p>' +
-									'<p class="swp-modal__meta">' +
-									keepTitle(result) +
-									' stays put until an admin decides. Deletion is paused while your request is pending.</p>' +
-									'<p class="swp-modal__hint">Close this to return to Jellyfin.</p>',
-							);
+							.then(function (r) {
+								return r.ok ? r.json() : null;
+							})
+							.then(function (result) {
+								if (!result) {
+									keepBtn.disabled = false;
+									if (delayBtn) delayBtn.disabled = false;
+									keepBtn.textContent = 'Request to Keep';
+									return;
+								}
+								renderKeepModalBody(
+									modal,
+									'<div class="swp-modal__ok">✓</div>' +
+										'<p class="swp-modal__title">Request sent</p>' +
+										'<p class="swp-modal__meta">' +
+										keepTitle(result) +
+										' stays put until an admin decides. Deletion is paused while your request is pending.</p>' +
+										'<p class="swp-modal__hint">Close this to return to Jellyfin.</p>',
+								);
+							})
+							.catch(function () {
+								keepBtn.disabled = false;
+								if (delayBtn) delayBtn.disabled = false;
+								keepBtn.textContent = 'Request to Keep';
+							});
+					});
+				}
+
+				if (delayBtn) {
+					delayBtn.addEventListener('click', function (e) {
+						e.preventDefault();
+						e.stopPropagation();
+						delayBtn.disabled = true;
+						if (keepBtn) keepBtn.disabled = true;
+						delayBtn.textContent = 'Delaying…';
+						fetch(SWEEPARR_ORIGIN + '/api/v1/delay/' + encodeURIComponent(token), {
+							method: 'POST',
+							credentials: 'omit',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ reason: note() }),
 						})
-						.catch(function () {
-							submitBtn.disabled = false;
-							submitBtn.textContent = 'Request to Keep';
-						});
-				});
+							.then(function (r) {
+								return r.ok ? r.json() : null;
+							})
+							.then(function (result) {
+								if (!result) {
+									delayBtn.disabled = false;
+									if (keepBtn) keepBtn.disabled = false;
+									delayBtn.textContent = '⏱ Delay ' + (data.delay_days || 0) + ' days';
+									return;
+								}
+								if (result.capped) {
+									renderKeepModalBody(
+										modal,
+										'<p class="swp-modal__title">No delays left</p>' +
+											'<p class="swp-modal__meta">You have used all available delays for ' +
+											keepTitle(data) +
+											'.</p>',
+									);
+									return;
+								}
+								var remaining = result.delay_remaining || 0;
+								renderKeepModalBody(
+									modal,
+									'<div class="swp-modal__ok">⏱</div>' +
+										'<p class="swp-modal__title">Removal delayed</p>' +
+										'<p class="swp-modal__meta">' +
+										keepTitle(data) +
+										' now leaves ' +
+										fmt(result.delete_at) +
+										'. ' +
+										(remaining > 0
+											? 'You can delay ' + remaining + ' more time' + (remaining === 1 ? '' : 's') + '.'
+											: 'You have used all available delays.') +
+										'</p>' +
+										'<p class="swp-modal__hint">Close this to return to Jellyfin.</p>',
+								);
+							})
+							.catch(function () {
+								delayBtn.disabled = false;
+								if (keepBtn) keepBtn.disabled = false;
+								delayBtn.textContent = '⏱ Delay ' + (data.delay_days || 0) + ' days';
+							});
+					});
+				}
 			})
 			.catch(function () {
 				renderKeepModalBody(
