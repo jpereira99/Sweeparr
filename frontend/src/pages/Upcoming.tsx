@@ -15,7 +15,6 @@ export function Upcoming() {
   const navigate = useNavigate();
   const [view, setView] = useState<"calendar" | "list">("calendar");
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useQuery({
     queryKey: ["schedule"],
@@ -130,8 +129,6 @@ export function Upcoming() {
       ) : (
         <ListView
           units={units}
-          selected={selected}
-          setSelected={setSelected}
           keep={keep}
           delay={delay}
           deleteNow={deleteNow}
@@ -296,50 +293,26 @@ function CalendarView({ units }: { units: any[] }) {
   );
 }
 
-function ListView({
-  units,
-  selected,
-  setSelected,
-  keep,
-  delay,
-  deleteNow,
-  navigate,
-}: any) {
-  const cols =
-    "grid-cols-[36px_56px_minmax(180px,1.4fr)_220px_120px_1fr_90px_190px]";
-  const toggle = (k: string) => {
-    const next = new Set<string>(selected);
-    next.has(k) ? next.delete(k) : next.add(k);
-    setSelected(next);
-  };
+function ListView({ units, keep, delay, deleteNow, navigate }: any) {
+  const cols = "grid-cols-[56px_minmax(180px,1.4fr)_220px_120px_1fr_90px_190px]";
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-bg">
       <div className="flex items-center gap-3 border-b border-line-subtle bg-bg-raised px-6 py-3.5 text-[12.5px] text-ink-mid">
         <span>List view · sorted by delete date (errors pinned)</span>
-        {selected.size > 0 && (
-          <span className="ml-auto text-ink-hi">{selected.size} selected</span>
-        )}
       </div>
       <div
         className={`grid ${cols} gap-x-3 border-b border-line-subtle px-6 py-2`}
       >
-        {[
-          "",
-          "",
-          "TITLE",
-          "STATUS",
-          "DELETES",
-          "RULE · WHY",
-          "FREES",
-          "ACTIONS",
-        ].map((h, i) => (
-          <span
-            key={i}
-            className={`text-[10.5px] font-semibold tracking-[0.08em] text-ink-low ${i >= 6 ? "text-right" : ""}`}
-          >
-            {h}
-          </span>
-        ))}
+        {["", "TITLE", "STATUS", "DELETES", "RULE · WHY", "FREES", "ACTIONS"].map(
+          (h, i) => (
+            <span
+              key={i}
+              className={`text-[10.5px] font-semibold tracking-[0.08em] text-ink-low ${i >= 5 ? "text-right" : ""}`}
+            >
+              {h}
+            </span>
+          ),
+        )}
       </div>
       {units.map((u: any) => {
         const cd = countdown(u.days_until);
@@ -348,16 +321,6 @@ function ListView({
             key={u.key}
             className={`grid ${cols} items-center gap-x-3 border-b border-[#141A26] px-6 py-2`}
           >
-            <span>
-              {u.state !== "ERROR" && (
-                <input
-                  type="checkbox"
-                  checked={selected.has(u.key)}
-                  onChange={() => toggle(u.key)}
-                  className="h-3.5 w-3.5 accent-accent"
-                />
-              )}
-            </span>
             <Poster size={40} src={u.poster_url} />
             <span>
               <button
@@ -440,37 +403,6 @@ function ListView({
           </div>
         );
       })}
-      {selected.size > 0 && (
-        <BulkBar
-          units={units}
-          selected={selected}
-          keep={keep}
-          delay={delay}
-          deleteNow={deleteNow}
-        />
-      )}
-    </div>
-  );
-}
-
-function BulkBar({ units, selected, keep, delay, deleteNow }: any) {
-  const chosen = units.filter((u: any) => selected.has(u.key));
-  return (
-    <div className="flex items-center gap-3 border-t border-line-subtle bg-bg-raised px-6 py-3">
-      <span className="text-[12px] text-ink-mid">{chosen.length} selected</span>
-      <Button size="sm" variant="keep" onClick={() => chosen.forEach(keep)}>
-        ✓ Keep
-      </Button>
-      <Button size="sm" onClick={() => chosen.forEach(delay)}>
-        Delay
-      </Button>
-      <Button
-        size="sm"
-        variant="danger"
-        onClick={() => chosen.forEach(deleteNow)}
-      >
-        Delete now
-      </Button>
     </div>
   );
 }
