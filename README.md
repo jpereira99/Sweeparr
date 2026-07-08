@@ -157,6 +157,10 @@ Managed in the admin **Settings** page and persisted in the `settings` table:
 - **Keep & delay options** — toggle household **keep requests** and self-service **delay**
   independently, and set how many days each delay adds (`delay_days`) and how many times a single
   item can be delayed (`delay_max_count`)
+- **Automatic protections** — independently toggle each *system* protection (Jellyfin favorites,
+  airing series, the `sweeparr-keep` arr tag) and the recently-requested window
+  (`request_protection_days`, in days; `0` disables it). These are the conditions that can push a
+  matched unit to **KEPT** without any admin action — see [Safety model](#safety-model-in-one-paragraph).
 - **Job schedules** — view next run time and manually trigger any sync or lifecycle job
 - **Account** — change local admin password
 
@@ -223,6 +227,17 @@ re-verify protections and call Radarr/Sonarr. The whole path is logged, includin
 and delay. Disabling a rule or pausing the system stops new scheduling; existing scheduled items can
 still be kept, delayed, or manually unscheduled.
 
+**KEPT isn't always an admin decision.** A matched unit can also land in KEPT because it currently
+trips one of the *system* protections — a Jellyfin favorite, the latest season of an airing show, the
+`sweeparr-keep` tag in Sonarr/Radarr, or a recent Jellyseerr request — each independently toggleable in
+**Settings → Automatic protections**. Whenever this happens, every reason is written to the
+`protection` table (not just logged) so the **Keeps** page can show exactly which condition(s) are
+holding an item, distinguishing it from an indefinite admin keep. An hourly `lift_protections` job
+re-checks every system-protected KEPT unit from scratch: the moment none of its reasons still apply
+(unfavorited, tag removed, request window passed, series ended), it's automatically returned to
+`ACTIVE` and the cleared reasons are written to the audit log. Admin keeps are never touched by this —
+they're indefinite until explicitly **released**.
+
 ## API surface (selected)
 
 ```
@@ -231,7 +246,9 @@ GET  /api/v1/dashboard                 gauges, leaving-this-week, bytes-freed, h
 GET  /api/v1/schedule                  upcoming removals board
 POST /api/v1/units/{type}/{id}/keep    admin veto → KEPT (indefinite)
 POST /api/v1/units/{type}/{id}/release admin unkeep → ACTIVE (re-enters evaluation)
+POST /api/v1/units/{type}/{id}/restore undo: replay a unit's prior lifecycle snapshot
 POST /api/v1/units/{type}/{id}/delay   admin delay (capped, sets floor; stays SCHEDULED)
+GET  /api/v1/kept                      all KEPT units + full protection list per unit (admin or system)
 POST /api/v1/keep-requests             household keep request (admin approves → indefinite keep)
 POST /api/v1/delay/{token}             public, token-authed self-service delay (no approval, capped)
 GET  /api/v1/rules · POST /rules/preview   rules CRUD + stateless preview

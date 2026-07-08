@@ -21,6 +21,7 @@ DEFAULTS: dict[str, Any] = {
     "gb_per_hour_threshold": 3.0,
     "favorite_protects": True,
     "airing_protects": True,
+    "tag_protects": True,
     "request_protection_days": 30,
     "leaving_soon_collection": True,
     "jellyfin_inject_variant": "default",

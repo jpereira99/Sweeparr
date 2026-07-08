@@ -76,20 +76,26 @@ async def kept(
     session: AsyncSession = Depends(get_session),
     _: Principal = Depends(require_admin),
 ):
-    """All currently KEPT units (flagged keeps) with their keep reason."""
+    """All currently KEPT units (flagged keeps), with the full, live list of
+    protections behind each one — an admin keep, or one or more system
+    protections (favorite, airing, tag, request window, unmanaged).
+    """
     units = await _collect(session, [LifecycleState.KEPT.value])
-    keeps = (
-        (
-            await session.execute(
-                select(Protection).where(Protection.kind == "keep")
-            )
+    rows = (await session.execute(select(Protection))).scalars().all()
+    by_key: dict[str, list[dict]] = {}
+    for r in rows:
+        by_key.setdefault(f"{r.unit_type}:{r.unit_id}", []).append(
+            {"kind": r.kind, "detail": r.detail}
         )
-        .scalars()
-        .all()
-    )
-    reason_by_key = {f"{k.unit_type}:{k.unit_id}": k.detail for k in keeps}
     for u in units:
-        u["keep_reason"] = reason_by_key.get(u["key"])
+        protections = by_key.get(u["key"], [])
+        u["protections"] = protections
+        u["keep_reason"] = next(
+            (p["detail"] for p in protections if p["kind"] == "keep"), None
+        )
+        u["auto_liftable"] = bool(protections) and not any(
+            p["kind"] == "keep" for p in protections
+        )
     units.sort(key=lambda u: u["title"].lower())
     return {"units": units, "total_gb": round(sum(u["size_gb"] for u in units), 1)}
 

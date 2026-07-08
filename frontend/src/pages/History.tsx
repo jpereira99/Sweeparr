@@ -9,6 +9,8 @@ const FILTERS: { id?: string; label: string }[] = [
   { id: undefined, label: "all" },
   { id: "deleted", label: "deletions" },
   { id: "kept", label: "keeps" },
+  { id: "released", label: "released" },
+  { id: "auto_released", label: "auto-released" },
   { id: "delayed", label: "delays" },
   { id: "scheduled", label: "scheduled" },
   { id: "rule_disabled", label: "rule changes" },
@@ -17,10 +19,21 @@ const FILTERS: { id?: string; label: string }[] = [
 const ACTION_COLOR: Record<string, string> = {
   deleted: "text-state-muted",
   kept: "text-state-kept-ink",
+  released: "text-ink-mid",
+  auto_released: "text-state-scheduled-ink",
   delayed: "text-state-scheduled-ink",
   scheduled: "text-state-scheduled-ink",
   rule_disabled: "text-ink-mid",
   error: "text-state-error-ink",
+};
+
+const PROTECTION_LABEL: Record<string, string> = {
+  favorite: "favorite",
+  tag: "tag",
+  airing: "airing",
+  request_window: "requested",
+  unmanaged: "unmanaged",
+  keep: "admin keep",
 };
 
 export function History() {
@@ -110,6 +123,34 @@ export function History() {
                 )}
                 {e.detail?.by && (
                   <span className="text-ink-low">by {e.detail.by}</span>
+                )}
+                {(e.detail?.reasons ?? e.detail?.cleared) && (
+                  <span className="flex flex-wrap gap-1">
+                    {(e.detail.reasons ?? e.detail.cleared).map(
+                      (r: any, i: number) => (
+                        <span
+                          key={i}
+                          title={r.detail ?? undefined}
+                          className="rounded bg-bg-raised px-1.5 py-0.5 font-mono text-[10px] text-ink-mid"
+                        >
+                          {PROTECTION_LABEL[r.kind] ?? r.kind}
+                        </span>
+                      ),
+                    )}
+                  </span>
+                )}
+                {e.detail?.was_protected_by && (
+                  <span className="flex flex-wrap gap-1">
+                    {e.detail.was_protected_by.map((r: any, i: number) => (
+                      <span
+                        key={i}
+                        title={r.detail ?? undefined}
+                        className="rounded bg-bg-raised px-1.5 py-0.5 font-mono text-[10px] text-ink-low line-through decoration-ink-faint"
+                      >
+                        {PROTECTION_LABEL[r.kind] ?? r.kind}
+                      </span>
+                    ))}
+                  </span>
                 )}
                 {e.detail?.error && (
                   <span className="truncate text-state-error-ink">

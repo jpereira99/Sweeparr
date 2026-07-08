@@ -83,6 +83,10 @@ async def job_execute_deletions(session):
     return await lifecycle.run_execute_deletions(session)
 
 
+async def job_lift_protections(session):
+    return await lifecycle.run_lift_protections(session)
+
+
 async def job_notify(session):
     return {"reminders": 0}
 
@@ -116,6 +120,7 @@ JOBS: dict[str, dict[str, Any]] = {
     "aggregate_playback": {"fn": job_aggregate_playback, "minutes": 15},
     "evaluate_rules": {"fn": job_evaluate_rules, "hours": 8},
     "execute_deletions": {"fn": job_execute_deletions, "hours": 1},
+    "lift_protections": {"fn": job_lift_protections, "hours": 1},
     "notify": {"fn": job_notify, "hours": 1},
     "sync_leaving_collection": {"fn": job_sync_leaving_collection, "hours": 1},
     "housekeeping": {"fn": job_housekeeping, "hours": 24},

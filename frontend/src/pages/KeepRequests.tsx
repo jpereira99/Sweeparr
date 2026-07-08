@@ -7,6 +7,15 @@ import { StatusPill } from "../components/StatusPill";
 import { useToast } from "../components/Toast";
 import { gb } from "../lib/format";
 
+const PROTECTION_LABEL: Record<string, string> = {
+  favorite: "Jellyfin favorite",
+  tag: "sweeparr-keep tag",
+  airing: "Airing series",
+  request_window: "Recently requested",
+  unmanaged: "Unmanaged item",
+  keep: "Kept by admin",
+};
+
 export function KeepRequests() {
   const [tab, setTab] = useState<"kept" | "requests">("kept");
   return (
@@ -79,12 +88,35 @@ function FlaggedKeeps() {
                 </span>
               ) : null}
             </div>
-            <div className="text-[11.5px] text-ink-low">
-              {u.unit_type === "season" ? "TV" : "Movie"} · {gb(u.size_gb)}
-              {u.keep_reason ? ` · ${u.keep_reason}` : ""}
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11.5px] text-ink-low">
+                {u.unit_type === "season" ? "TV" : "Movie"} · {gb(u.size_gb)}
+              </span>
+              {(u.protections ?? []).length === 0 ? (
+                <span className="rounded bg-bg-raised px-1.5 py-0.5 font-mono text-[10px] text-ink-low">
+                  no reason on record
+                </span>
+              ) : (
+                (u.protections ?? []).map((p: any, i: number) => (
+                  <span
+                    key={i}
+                    title={p.detail ?? undefined}
+                    className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                      p.kind === "keep"
+                        ? "bg-[rgba(63,162,111,0.13)] text-state-kept-ink"
+                        : "bg-bg-raised text-ink-mid"
+                    }`}
+                  >
+                    {PROTECTION_LABEL[p.kind] ?? p.kind}
+                  </span>
+                ))
+              )}
             </div>
           </div>
           <StatusPill state="KEPT" size="sm" />
+          <span className="w-28 shrink-0 text-right font-mono text-[10px] text-ink-low">
+            {u.auto_liftable ? "auto-lifts" : "indefinite"}
+          </span>
           <Button size="sm" onClick={() => release(u)}>
             Release
           </Button>

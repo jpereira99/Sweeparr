@@ -31,6 +31,9 @@ export function Settings() {
     days?: number;
     max?: number;
   }>({});
+  const [requestWindowDraft, setRequestWindowDraft] = useState<
+    number | undefined
+  >(undefined);
 
   async function test(svc: string) {
     setTesting(svc);
@@ -434,6 +437,132 @@ export function Settings() {
               </Button>
             </div>
           </div>
+        </div>
+      </Card>
+
+      <Card className="mt-4">
+        <SectionLabel>Automatic protections</SectionLabel>
+        <p className="mb-3 text-[12px] leading-relaxed text-ink-mid">
+          When a rule matches an item that still meets one of these
+          conditions, Sweeparr keeps it automatically instead of scheduling
+          it — no admin action needed. Every hour it re-checks: once the
+          condition stops applying (unfavorited, tag removed, request window
+          passed), the item is released back to normal evaluation on its
+          own. Manual keeps made from the Keep button are indefinite and are
+          never affected by this — release those yourself from the{" "}
+          <span className="font-medium text-ink-hi">Keeps</span> page.
+        </p>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between rounded border border-line-subtle bg-bg-inset p-3">
+            <div>
+              <div className="text-[12px] font-medium text-ink-hi">
+                Jellyfin favorites
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-ink-low">
+                Keep anything favorited by any Jellyfin user.
+              </p>
+            </div>
+            <Toggle
+              on={data.values?.favorite_protects ?? true}
+              onChange={(on) =>
+                saveValues(
+                  { favorite_protects: on },
+                  on
+                    ? "Favorites now protect items"
+                    : "Favorites no longer protect items",
+                )
+              }
+            />
+          </div>
+          <div className="flex items-center justify-between rounded border border-line-subtle bg-bg-inset p-3">
+            <div>
+              <div className="text-[12px] font-medium text-ink-hi">
+                Airing series
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-ink-low">
+                Keep the latest season of a continuing/airing show.
+              </p>
+            </div>
+            <Toggle
+              on={data.values?.airing_protects ?? true}
+              onChange={(on) =>
+                saveValues(
+                  { airing_protects: on },
+                  on
+                    ? "Airing series now protected"
+                    : "Airing series no longer protected",
+                )
+              }
+            />
+          </div>
+          <div className="flex items-center justify-between rounded border border-line-subtle bg-bg-inset p-3">
+            <div>
+              <div className="text-[12px] font-medium text-ink-hi">
+                Arr &quot;sweeparr-keep&quot; tag
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-ink-low">
+                Keep anything manually tagged in Sonarr/Radarr.
+              </p>
+            </div>
+            <Toggle
+              on={data.values?.tag_protects ?? true}
+              onChange={(on) =>
+                saveValues(
+                  { tag_protects: on },
+                  on ? "Tag protection enabled" : "Tag protection disabled",
+                )
+              }
+            />
+          </div>
+          <div className="rounded border border-line-subtle bg-bg-inset p-3">
+            <div className="flex flex-wrap items-end gap-4">
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-low">
+                  Recently requested (days, 0 = off)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={
+                    requestWindowDraft ??
+                    data.values?.request_protection_days ??
+                    30
+                  }
+                  onChange={(e) =>
+                    setRequestWindowDraft(Number(e.target.value))
+                  }
+                  className="h-8 w-32 rounded border border-line bg-bg px-2 font-mono text-[11px] text-ink-hi outline-none focus:border-accent"
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={async () => {
+                  await saveValues(
+                    {
+                      request_protection_days:
+                        requestWindowDraft ??
+                        data.values?.request_protection_days ??
+                        30,
+                    },
+                    "Request window saved",
+                  );
+                  setRequestWindowDraft(undefined);
+                }}
+              >
+                Save
+              </Button>
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-ink-low">
+              Keep items requested through Jellyseerr within the last N days,
+              so a fresh request isn&apos;t swept up immediately.
+            </p>
+          </div>
+          <p className="text-[11px] leading-relaxed text-ink-low">
+            Unmanaged items (no Sonarr/Radarr counterpart) are always kept —
+            Sweeparr has nothing to delete them through, so this one
+            isn&apos;t configurable.
+          </p>
         </div>
       </Card>
 
