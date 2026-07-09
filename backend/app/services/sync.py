@@ -382,7 +382,13 @@ async def _sync_jellyfin_watch_stats(session: AsyncSession, jf) -> dict[str, Any
 
 
 # Jellyseerr MediaRequestStatus / MediaStatus enums → readable strings.
-_REQUEST_STATUS = {1: "pending", 2: "approved", 3: "declined", 4: "failed", 5: "completed"}
+_REQUEST_STATUS = {
+    1: "pending",
+    2: "approved",
+    3: "declined",
+    4: "failed",
+    5: "completed",
+}
 _MEDIA_STATUS = {
     1: "unknown",
     2: "pending",

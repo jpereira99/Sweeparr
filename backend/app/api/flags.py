@@ -55,7 +55,14 @@ async def flags(
     )
     for m in movies:
         items.append(
-            _flag(m.jellyfin_id, m.delete_at, m.match_snapshot, "movie", m.id, actions=actions)
+            _flag(
+                m.jellyfin_id,
+                m.delete_at,
+                m.match_snapshot,
+                "movie",
+                m.id,
+                actions=actions,
+            )
         )
 
     rows = (

@@ -67,8 +67,7 @@ export const endpoints = {
 
   keepUnit: (t: string, id: number, b?: unknown) =>
     api.post(`${B}/units/${t}/${id}/keep`, b ?? {}),
-  release: (t: string, id: number) =>
-    api.post(`${B}/units/${t}/${id}/release`),
+  release: (t: string, id: number) => api.post(`${B}/units/${t}/${id}/release`),
   restore: (t: string, id: number, snapshot: unknown) =>
     api.post(`${B}/units/${t}/${id}/restore`, snapshot),
   delay: (t: string, id: number) => api.post(`${B}/units/${t}/${id}/delay`),
@@ -96,8 +95,7 @@ export const endpoints = {
   setJobSchedule: (
     name: string,
     schedule:
-      | { kind: "interval"; minutes: number }
-      | { kind: "cron"; expr: string },
+      { kind: "interval"; minutes: number } | { kind: "cron"; expr: string },
   ) => api.put(`${B}/jobs/${name}/schedule`, schedule),
 
   history: (action?: string) =>

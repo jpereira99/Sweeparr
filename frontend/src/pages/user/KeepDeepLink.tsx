@@ -112,9 +112,7 @@ export function KeepDeepLink() {
             <div className="mb-4 text-center text-[12px] leading-relaxed text-ink-mid">
               You've used all available delays for {data.title}
               {data.season_number ? ` S${data.season_number}` : ""}.
-              {data.allow_keep
-                ? " You can still request to keep it."
-                : ""}
+              {data.allow_keep ? " You can still request to keep it." : ""}
             </div>
             {data.allow_keep && (
               <button

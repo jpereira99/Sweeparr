@@ -231,7 +231,7 @@ function Builder({
       <div className="flex items-center gap-4 border-b border-line-subtle bg-bg-raised px-6 py-3.5">
         <label
           title="Rule name — click to edit"
-          className="group flex items-center gap-2 rounded-md border border-line bg-bg px-3 py-1.5 transition-colors hover:border-ink-low focus-within:border-accent focus-within:ring-1 focus-within:ring-accent"
+          className="group flex items-center gap-2 rounded-md border border-line bg-bg px-3 py-1.5 transition-colors focus-within:border-accent focus-within:ring-1 focus-within:ring-accent hover:border-ink-low"
         >
           <input
             value={draft.name}
@@ -248,7 +248,7 @@ function Builder({
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="flex-none text-ink-low transition-colors group-hover:text-ink-mid group-focus-within:text-accent"
+            className="flex-none text-ink-low transition-colors group-focus-within:text-accent group-hover:text-ink-mid"
             aria-hidden="true"
           >
             <path d="M12 20h9" />
@@ -565,10 +565,7 @@ function PreviewMatchesModal({
                 <span className="font-mono text-[12px] text-ink-hi">
                   {gb(i.size_gb)}
                 </span>
-                <Popover
-                  title="WHY WOULD THIS MATCH?"
-                  snapshot={i.snapshot}
-                />
+                <Popover title="WHY WOULD THIS MATCH?" snapshot={i.snapshot} />
               </div>
             ))}
           </div>

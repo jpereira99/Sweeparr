@@ -223,10 +223,7 @@ export function QC() {
                         .slice(0, 1)
                         .map(([k, v]: any) => `${k}=${v.value}`)}
                     </span>
-                    <Popover
-                      ruleName={data.rule.name}
-                      snapshot={m.snapshot}
-                    />
+                    <Popover ruleName={data.rule.name} snapshot={m.snapshot} />
                   </span>
                   <span className="flex justify-end gap-1.5">
                     {!m.protected && (

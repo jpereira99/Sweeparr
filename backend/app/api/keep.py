@@ -27,9 +27,7 @@ def _iso(dt):
     return dt.replace(tzinfo=timezone.utc).isoformat() if dt else None
 
 
-async def _action_options(
-    session: AsyncSession, unit: lifecycle.Unit | None
-) -> dict:
+async def _action_options(session: AsyncSession, unit: lifecycle.Unit | None) -> dict:
     """Which user actions (keep / delay) the client should offer for this unit."""
     settings = await all_settings(session)
     keep_enabled = bool(settings.get("keep_requests_enabled"))
@@ -407,7 +405,11 @@ async def delay_by_token(
         reason=body.reason,
     )
     if not result.get("ok") and result.get("reason") == "capped":
-        return {"ok": False, "capped": True, **await _resolve_keep_token(session, token)}
+        return {
+            "ok": False,
+            "capped": True,
+            **await _resolve_keep_token(session, token),
+        }
     if not result.get("ok"):
         raise HTTPException(409, "This item can no longer be delayed")
     return {"ok": True, **result, **await _resolve_keep_token(session, token)}

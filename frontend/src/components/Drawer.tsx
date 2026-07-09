@@ -88,9 +88,7 @@ export function Drawer({
 
   const isSeries = data?.type === "series";
   const selectedSeasonData = isSeries
-    ? (data?.seasons ?? []).find(
-        (s: any) => s.season_number === selectedSeason,
-      )
+    ? (data?.seasons ?? []).find((s: any) => s.season_number === selectedSeason)
     : null;
   // The unit the tabs/action-bar operate on: the movie itself, the selected
   // season, or nothing while viewing the series-wide overview.
@@ -237,11 +235,12 @@ export function Drawer({
                           key={i}
                           className="mb-1 rounded bg-[rgba(63,162,111,0.07)] px-2.5 py-1.5 text-[12px] text-state-kept-ink"
                         >
-                          {selectedSeason === null && p.season_number != null && (
-                            <span className="mr-1 font-mono text-[10px] text-ink-low">
-                              S{p.season_number}
-                            </span>
-                          )}
+                          {selectedSeason === null &&
+                            p.season_number != null && (
+                              <span className="mr-1 font-mono text-[10px] text-ink-low">
+                                S{p.season_number}
+                              </span>
+                            )}
                           {p.kind} —{" "}
                           <span className="text-ink-mid">{p.detail}</span>
                         </div>
@@ -367,7 +366,9 @@ export function Drawer({
                           `${activeUnit.unit_type}:${activeUnit.unit_id}`,
                       )?.result;
                       if (outcome === "protected_at_execute") {
-                        toast(`${activeLabel} is still protected — not deleted`);
+                        toast(
+                          `${activeLabel} is still protected — not deleted`,
+                        );
                       } else if (outcome === "held_pending_keep") {
                         toast(
                           `${activeLabel} has a pending keep request — not deleted`,

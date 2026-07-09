@@ -294,7 +294,8 @@ function CalendarView({ units }: { units: any[] }) {
 }
 
 function ListView({ units, keep, delay, deleteNow, navigate }: any) {
-  const cols = "grid-cols-[56px_minmax(180px,1.4fr)_220px_120px_1fr_90px_190px]";
+  const cols =
+    "grid-cols-[56px_minmax(180px,1.4fr)_220px_120px_1fr_90px_190px]";
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-bg">
       <div className="flex items-center gap-3 border-b border-line-subtle bg-bg-raised px-6 py-3.5 text-[12.5px] text-ink-mid">
@@ -303,16 +304,22 @@ function ListView({ units, keep, delay, deleteNow, navigate }: any) {
       <div
         className={`grid ${cols} gap-x-3 border-b border-line-subtle px-6 py-2`}
       >
-        {["", "TITLE", "STATUS", "DELETES", "RULE · WHY", "FREES", "ACTIONS"].map(
-          (h, i) => (
-            <span
-              key={i}
-              className={`text-[10.5px] font-semibold tracking-[0.08em] text-ink-low ${i >= 5 ? "text-right" : ""}`}
-            >
-              {h}
-            </span>
-          ),
-        )}
+        {[
+          "",
+          "TITLE",
+          "STATUS",
+          "DELETES",
+          "RULE · WHY",
+          "FREES",
+          "ACTIONS",
+        ].map((h, i) => (
+          <span
+            key={i}
+            className={`text-[10.5px] font-semibold tracking-[0.08em] text-ink-low ${i >= 5 ? "text-right" : ""}`}
+          >
+            {h}
+          </span>
+        ))}
       </div>
       {units.map((u: any) => {
         const cd = countdown(u.days_until);

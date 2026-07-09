@@ -161,7 +161,9 @@ function Requests() {
       {isLoading ? (
         <Skeleton rows={3} />
       ) : krs.length === 0 ? (
-        <EmptyState title={`No ${status === "all" ? "" : status} keep requests`}>
+        <EmptyState
+          title={`No ${status === "all" ? "" : status} keep requests`}
+        >
           Users can request to keep items from the Jellyfin banner. Approving
           one keeps the item indefinitely until you release it.
         </EmptyState>

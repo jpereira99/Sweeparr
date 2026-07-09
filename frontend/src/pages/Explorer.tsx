@@ -97,7 +97,9 @@ export function Explorer() {
       ) : (
         <div className="overflow-hidden rounded-lg border border-line bg-bg">
           <div className={`grid w-full ${cols}`}>
-            <div className={`${row} items-center border-b border-line-subtle py-2`}>
+            <div
+              className={`${row} items-center border-b border-line-subtle py-2`}
+            >
               {COLUMNS.map((col) => (
                 <ColumnHeader
                   key={col.id}

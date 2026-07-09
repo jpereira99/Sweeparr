@@ -213,9 +213,7 @@ def start_scheduler(overrides: dict[str, Any] | None = None) -> None:
             try:
                 schedule = normalize_schedule(raw)
             except ValueError:
-                log.warning(
-                    "ignoring invalid saved schedule for %s: %r", name, raw
-                )
+                log.warning("ignoring invalid saved schedule for %s: %r", name, raw)
         _schedules[name] = schedule
         scheduler.add_job(
             _tracked,

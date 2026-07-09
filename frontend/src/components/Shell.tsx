@@ -156,7 +156,9 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
           </div>
         </aside>
-        <main className="min-h-0 min-w-0 flex-1 overflow-auto p-8">{children}</main>
+        <main className="min-h-0 min-w-0 flex-1 overflow-auto p-8">
+          {children}
+        </main>
       </div>
     </div>
   );

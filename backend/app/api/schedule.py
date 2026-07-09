@@ -116,9 +116,7 @@ async def keep(
     principal: Principal = Depends(require_admin),
 ):
     unit = await _get_unit_or_404(session, unit_type, unit_id)
-    await lifecycle.keep_unit(
-        session, unit, actor=principal.name, reason=body.reason
-    )
+    await lifecycle.keep_unit(session, unit, actor=principal.name, reason=body.reason)
     return {"ok": True, "state": unit.obj.state}
 
 
