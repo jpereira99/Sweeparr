@@ -8,9 +8,12 @@ type Snapshot = Record<
 
 const PANEL_W = 320;
 
-// The "Why?" popover (§03 3.10): every SCHEDULED/CANDIDATE pill answers for
-// itself in one click. The matched-values snapshot is the same structure QC uses.
-export function WhyPopover({
+// Generic click-triggered, viewport-anchored popover rendered in a portal.
+// Re-anchors to its trigger on scroll/resize and flips at screen edges. Can be
+// used for plain hints (pass children) or the rule "Why?" snapshot (§03 3.10):
+// every SCHEDULED/CANDIDATE pill answers for itself in one click, using the same
+// matched-values structure QC renders.
+export function Popover({
   title = "WHY IS THIS LEAVING?",
   ruleName,
   snapshot,
@@ -52,7 +55,15 @@ export function WhyPopover({
 
     place();
     const id = requestAnimationFrame(place);
-    return () => cancelAnimationFrame(id);
+    // Keep the panel glued to its trigger while the page (or any ancestor)
+    // scrolls or the window resizes. Capture-phase catches nested scrollers.
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
   }, [open, snapshot]);
 
   useEffect(() => {

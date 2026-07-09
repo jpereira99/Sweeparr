@@ -28,7 +28,11 @@ from .services.integrations import (
     load_integrations,
     probe_integrations,
 )
-from .services.runtime import bootstrap_integrations_from_env, is_system_enabled
+from .services.runtime import (
+    bootstrap_integrations_from_env,
+    get_setting,
+    is_system_enabled,
+)
 from .services.sync import run_library_syncs
 
 logging.basicConfig(level=logging.INFO)
@@ -68,7 +72,8 @@ async def lifespan(app: FastAPI):
         await bootstrap_local_admin(session)
         integ = await load_integrations(session)
         await probe_integrations(integ)
-    scheduler.start_scheduler()
+        job_schedules = await get_setting(session, "job_schedules") or {}
+    scheduler.start_scheduler(job_schedules)
     asyncio.create_task(_bootstrap_library_if_empty())
     yield
     scheduler.scheduler.shutdown(wait=False)

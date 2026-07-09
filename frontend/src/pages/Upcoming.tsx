@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { endpoints, unitSnapshot } from "../lib/api";
 import { PageHeader } from "./Dashboard";
 import { StatusPill } from "../components/StatusPill";
-import { WhyPopover } from "../components/WhyPopover";
+import { Popover } from "../components/Popover";
 import { Button, Chip, EmptyState, Poster, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { countdown, gb } from "../lib/format";
@@ -353,7 +353,7 @@ function ListView({ units, keep, delay, deleteNow, navigate }: any) {
                 date={u.delete_at}
                 delayCount={u.delay_count}
               />
-              <WhyPopover ruleName={u.rule_name} snapshot={u.snapshot} />
+              <Popover ruleName={u.rule_name} snapshot={u.snapshot} />
             </span>
             <span>
               {u.state === "ERROR" ? (

@@ -9,7 +9,7 @@ import {
   Skeleton,
   EmptyState,
 } from "../components/ui";
-import { WhyPopover } from "../components/WhyPopover";
+import { Popover } from "../components/Popover";
 import { StatusPill } from "../components/StatusPill";
 import { useToast } from "../components/Toast";
 import { gb } from "../lib/format";
@@ -223,7 +223,7 @@ export function QC() {
                         .slice(0, 1)
                         .map(([k, v]: any) => `${k}=${v.value}`)}
                     </span>
-                    <WhyPopover
+                    <Popover
                       ruleName={data.rule.name}
                       snapshot={m.snapshot}
                     />

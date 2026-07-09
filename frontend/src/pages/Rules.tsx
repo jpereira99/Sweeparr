@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { endpoints } from "../lib/api";
 import { PageHeader } from "./Dashboard";
 import { Button, EmptyState, Skeleton, Toggle } from "../components/ui";
-import { WhyPopover } from "../components/WhyPopover";
+import { Popover } from "../components/Popover";
 import { useToast } from "../components/Toast";
 import { gb } from "../lib/format";
 
@@ -565,7 +565,7 @@ function PreviewMatchesModal({
                 <span className="font-mono text-[12px] text-ink-hi">
                   {gb(i.size_gb)}
                 </span>
-                <WhyPopover
+                <Popover
                   title="WHY WOULD THIS MATCH?"
                   snapshot={i.snapshot}
                 />

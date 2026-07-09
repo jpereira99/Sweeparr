@@ -5,13 +5,15 @@ from __future__ import annotations
 from datetime import timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_session
 from ..models import AuditLog, JobRun, MediaItem
+from ..schemas import JobScheduleIn
 from ..services import scheduler
+from ..services.runtime import get_setting, set_setting
 from .auth import Principal, require_admin
 
 router = APIRouter(prefix="/api/v1", tags=["jobs"])
@@ -54,6 +56,36 @@ async def list_jobs(
 async def run_job(name: str, _: Principal = Depends(require_admin)):
     result = await scheduler.run_now(name)
     return {"ok": True, "summary": result}
+
+
+@router.put("/jobs/{name}/schedule")
+async def set_job_schedule(
+    name: str,
+    body: JobScheduleIn,
+    session: AsyncSession = Depends(get_session),
+    _: Principal = Depends(require_admin),
+):
+    if name not in scheduler.JOBS:
+        raise HTTPException(404, "Unknown job")
+    if body.kind == "interval" and body.minutes is None:
+        raise HTTPException(400, "interval schedule requires 'minutes'")
+    if body.kind == "cron" and not (body.expr or "").strip():
+        raise HTTPException(400, "cron schedule requires 'expr'")
+    schedule = (
+        {"kind": "interval", "minutes": body.minutes}
+        if body.kind == "interval"
+        else {"kind": "cron", "expr": body.expr}
+    )
+    # Validate + apply live first, so an invalid schedule is never persisted.
+    try:
+        normalized = scheduler.reschedule_job(name, schedule)
+    except ValueError as exc:
+        raise HTTPException(400, f"Invalid schedule: {exc}")
+    schedules = dict(await get_setting(session, "job_schedules") or {})
+    schedules[name] = normalized
+    await set_setting(session, "job_schedules", schedules)
+    await session.commit()
+    return {"ok": True, "job": name, "schedule": normalized}
 
 
 @router.post("/jobs/{name}/pause")

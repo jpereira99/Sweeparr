@@ -281,7 +281,7 @@ backend/
 frontend/
   src/pages/      Dashboard · Upcoming · Rules · QC · Explorer · KeepRequests · History · Settings · Login
   src/pages/user/ KeepDeepLink (magic-link keep flow)
-  src/components/ StatusPill · Shell · WhyPopover · Drawer · Toast · ui
+  src/components/ StatusPill · Shell · Popover · Drawer · Toast · ui
 design/          design doc, original spec export, decode helpers (dev-only)
 .github/workflows/  CI (lint + build check) · publish (build & push to GHCR)
 Dockerfile · docker-compose.yml · docker-compose.ghcr.yml · .env.example · LICENSE

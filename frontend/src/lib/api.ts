@@ -92,6 +92,12 @@ export const endpoints = {
   runJob: (name: string) => api.post(`${B}/jobs/${name}/run`),
   pauseJob: (name: string) => api.post(`${B}/jobs/${name}/pause`),
   resumeJob: (name: string) => api.post(`${B}/jobs/${name}/resume`),
+  setJobSchedule: (
+    name: string,
+    schedule:
+      | { kind: "interval"; minutes: number }
+      | { kind: "cron"; expr: string },
+  ) => api.put(`${B}/jobs/${name}/schedule`, schedule),
 
   history: (action?: string) =>
     api.get(`${B}/history${action ? `?action=${action}` : ""}`),

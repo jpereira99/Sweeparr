@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -84,3 +84,9 @@ class TestConnectionOut(BaseModel):
     ok: bool
     detail: str
     latency_ms: Optional[int] = None
+
+
+class JobScheduleIn(BaseModel):
+    kind: Literal["interval", "cron"]
+    minutes: Optional[int] = Field(default=None, ge=1, le=60 * 24 * 7)
+    expr: Optional[str] = None

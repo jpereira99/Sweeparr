@@ -29,6 +29,7 @@ DEFAULTS: dict[str, Any] = {
     "delay_enabled": False,
     "delay_days": 14,
     "delay_max_count": 3,
+    "job_schedules": {},
 }
 
 
