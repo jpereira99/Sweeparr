@@ -2,10 +2,131 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { endpoints } from "../lib/api";
 import { PageHeader } from "./Dashboard";
-import { Button, Chip, EmptyState, Skeleton } from "../components/ui";
+import { Button, Chip, EmptyState, Poster, Skeleton } from "../components/ui";
+import { StatusPill } from "../components/StatusPill";
 import { useToast } from "../components/Toast";
+import { gb } from "../lib/format";
+
+const PROTECTION_LABEL: Record<string, string> = {
+  favorite: "Jellyfin favorite",
+  tag: "sweeparr-keep tag",
+  airing: "Airing series",
+  request_window: "Recently requested",
+  unmanaged: "Unmanaged item",
+  keep: "Kept by admin",
+};
 
 export function KeepRequests() {
+  const [tab, setTab] = useState<"kept" | "requests">("kept");
+  return (
+    <div>
+      <PageHeader
+        title="Keeps"
+        subtitle="manage everything you've flagged to keep, plus household keep requests"
+      />
+      <div className="mb-4 flex gap-2">
+        <Chip active={tab === "kept"} onClick={() => setTab("kept")}>
+          Flagged Keeps
+        </Chip>
+        <Chip active={tab === "requests"} onClick={() => setTab("requests")}>
+          Requests
+        </Chip>
+      </div>
+      {tab === "kept" ? <FlaggedKeeps /> : <Requests />}
+    </div>
+  );
+}
+
+function FlaggedKeeps() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const { data, isLoading } = useQuery({
+    queryKey: ["kept"],
+    queryFn: endpoints.kept,
+  });
+  const units = data?.units ?? [];
+
+  async function release(u: any) {
+    await endpoints.release(u.unit_type, u.unit_id);
+    toast(`Released ${u.title} — back to evaluation`, async () => {
+      await endpoints.keepUnit(u.unit_type, u.unit_id, {
+        reason: u.keep_reason ?? undefined,
+      });
+      qc.invalidateQueries();
+    });
+    qc.invalidateQueries();
+  }
+
+  if (isLoading) return <Skeleton rows={3} />;
+  if (units.length === 0)
+    return (
+      <EmptyState title="Nothing flagged to keep">
+        Keep an item from the schedule, the drawer, or by approving a request,
+        and it will appear here — off-limits to rules until you release it.
+      </EmptyState>
+    );
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-line bg-bg">
+      <div className="flex items-center gap-3 border-b border-line-subtle bg-bg-raised px-6 py-3 text-[12.5px] text-ink-mid">
+        <span>
+          {units.length} kept · {gb(data?.total_gb)} held from removal
+        </span>
+      </div>
+      {units.map((u: any) => (
+        <div
+          key={u.key}
+          className="flex items-center gap-3 border-b border-[#141A26] px-6 py-2.5"
+        >
+          <Poster size={40} src={u.poster_url} />
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-medium text-ink-hi">
+              {u.title}
+              {u.season_number ? (
+                <span className="ml-1 rounded bg-accent-subtle px-1.5 py-0.5 font-mono text-[10.5px] text-accent-hover">
+                  S{u.season_number}
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11.5px] text-ink-low">
+                {u.unit_type === "season" ? "TV" : "Movie"} · {gb(u.size_gb)}
+              </span>
+              {(u.protections ?? []).length === 0 ? (
+                <span className="rounded bg-bg-raised px-1.5 py-0.5 font-mono text-[10px] text-ink-low">
+                  no reason on record
+                </span>
+              ) : (
+                (u.protections ?? []).map((p: any, i: number) => (
+                  <span
+                    key={i}
+                    title={p.detail ?? undefined}
+                    className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                      p.kind === "keep"
+                        ? "bg-[rgba(63,162,111,0.13)] text-state-kept-ink"
+                        : "bg-bg-raised text-ink-mid"
+                    }`}
+                  >
+                    {PROTECTION_LABEL[p.kind] ?? p.kind}
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+          <StatusPill state="KEPT" size="sm" />
+          <span className="w-28 shrink-0 text-right font-mono text-[10px] text-ink-low">
+            {u.auto_liftable ? "auto-lifts" : "indefinite"}
+          </span>
+          <Button size="sm" onClick={() => release(u)}>
+            Release
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Requests() {
   const qc = useQueryClient();
   const toast = useToast();
   const [status, setStatus] = useState("pending");
@@ -16,8 +137,8 @@ export function KeepRequests() {
   const krs = data?.keep_requests ?? [];
 
   async function approve(id: number) {
-    await endpoints.approveKeep(id, { days: 60 });
-    toast("Keep approved (+60d)");
+    await endpoints.approveKeep(id);
+    toast("Keep approved — kept indefinitely");
     qc.invalidateQueries();
   }
   async function deny(id: number) {
@@ -30,10 +151,6 @@ export function KeepRequests() {
 
   return (
     <div>
-      <PageHeader
-        title="Keep Requests"
-        subtitle="approve = keep with an optional expiry; on expiry the item re-enters normal evaluation"
-      />
       <div className="mb-4 flex gap-2">
         {["pending", "approved", "denied", "all"].map((s) => (
           <Chip key={s} active={status === s} onClick={() => setStatus(s)}>
@@ -47,7 +164,8 @@ export function KeepRequests() {
         <EmptyState
           title={`No ${status === "all" ? "" : status} keep requests`}
         >
-          Users can request to keep items from the Jellyfin banner.
+          Users can request to keep items from the Jellyfin banner. Approving
+          one keeps the item indefinitely until you release it.
         </EmptyState>
       ) : (
         <div className="grid grid-cols-2 gap-3">
@@ -87,7 +205,7 @@ export function KeepRequests() {
                     Deny
                   </Button>
                   <span className="ml-auto font-mono text-[10.5px] text-ink-low">
-                    keep until: +60d
+                    approve = keep indefinitely
                   </span>
                 </div>
               ) : (

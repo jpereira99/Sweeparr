@@ -11,6 +11,7 @@ from typing import Any, Optional
 
 import httpx
 
+from .. import __version__
 from .base import IntegrationAdapter
 
 
@@ -102,6 +103,31 @@ class JellyfinAdapter(IntegrationAdapter):
     async def get_sessions(self) -> list[dict[str, Any]]:
         return await self._request("GET", "/Sessions") or []
 
+    async def get_primary_image(
+        self, item_id: str, *, max_width: int = 400
+    ) -> Optional[tuple[bytes, str]]:
+        """Fetch an item's primary (poster) image.
+
+        Returns ``(bytes, content_type)`` or ``None`` when the image can't be
+        retrieved. Image bytes bypass the JSON-oriented ``_request`` helper, and
+        we swallow errors so a missing poster never surfaces as a 500.
+        """
+        if not self.configured or not item_id:
+            return None
+        url = (
+            f"{self.base_url}/Items/{item_id}/Images/Primary"
+            f"?maxWidth={max_width}&quality=90"
+        )
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(url, headers=self._headers())
+            if resp.status_code != 200 or not resp.content:
+                return None
+            content_type = resp.headers.get("content-type") or "image/jpeg"
+            return resp.content, content_type
+        except httpx.HTTPError:
+            return None
+
     async def refresh_library(self) -> None:
         await self._request("POST", "/Library/Refresh")
 
@@ -120,7 +146,7 @@ class JellyfinAdapter(IntegrationAdapter):
         url = f"{self.base_url}/Users/AuthenticateByName"
         auth_header = (
             'MediaBrowser Client="Sweeparr", Device="Sweeparr", '
-            'DeviceId="sweeparr", Version="1.0.0"'
+            f'DeviceId="sweeparr", Version="{__version__}"'
         )
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:

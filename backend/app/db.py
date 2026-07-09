@@ -88,6 +88,19 @@ async def _migrate_schema() -> None:
                 text("ALTER TABLE user ADD COLUMN password_hash VARCHAR(256)")
             )
 
+        # Self-service delay columns on the deletable units.
+        for table in ("media_item", "season"):
+            if not await _column_exists(conn, table, "delay_until"):
+                await conn.execute(
+                    text(f"ALTER TABLE {table} ADD COLUMN delay_until DATETIME")
+                )
+            if not await _column_exists(conn, table, "delay_count"):
+                await conn.execute(
+                    text(
+                        f"ALTER TABLE {table} ADD COLUMN delay_count INTEGER NOT NULL DEFAULT 0"
+                    )
+                )
+
         # CANDIDATE shadow units -> ACTIVE
         await conn.execute(
             text("UPDATE media_item SET state = 'ACTIVE' WHERE state = 'CANDIDATE'")

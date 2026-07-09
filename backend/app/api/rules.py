@@ -314,6 +314,7 @@ async def qc(
                 "protected": m["protected"],
                 "protections": m["protections"],
                 "state": u.obj.state,
+                "delay_count": getattr(u.obj, "delay_count", 0) or 0,
             }
         )
     return {

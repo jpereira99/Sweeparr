@@ -10,7 +10,9 @@ from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..services.deeplink import make_unit_token
 from ..services.integrations import get_integrations
+from ..services.runtime import all_settings
 from ..db import get_session
 from ..models import LifecycleState, MediaItem, Season
 from .serializers import _public_reason
@@ -30,6 +32,13 @@ async def flags(
     if not ids:
         return {"items": []}
 
+    settings = await all_settings(session)
+    actions = {
+        "allow_keep": bool(settings.get("keep_requests_enabled")),
+        "allow_delay": bool(settings.get("delay_enabled")),
+        "delay_days": int(settings.get("delay_days") or 0),
+    }
+
     base = get_integrations().jellyseerr.base_url or ""
     items = []
     movies = (
@@ -45,7 +54,16 @@ async def flags(
         .all()
     )
     for m in movies:
-        items.append(_flag(m.jellyfin_id, m.delete_at, m.match_snapshot))
+        items.append(
+            _flag(
+                m.jellyfin_id,
+                m.delete_at,
+                m.match_snapshot,
+                "movie",
+                m.id,
+                actions=actions,
+            )
+        )
 
     rows = (
         await session.execute(
@@ -60,13 +78,19 @@ async def flags(
     for s, item in rows:
         items.append(
             _flag(
-                item.jellyfin_id, s.delete_at, s.match_snapshot, season=s.season_number
+                item.jellyfin_id,
+                s.delete_at,
+                s.match_snapshot,
+                "season",
+                s.id,
+                season=s.season_number,
+                actions=actions,
             )
         )
     return {"items": items}
 
 
-def _flag(jf_id, delete_at, snapshot, season=None):
+def _flag(jf_id, delete_at, snapshot, unit_type, unit_id, season=None, actions=None):
     da = None
     if delete_at:
         da = (
@@ -79,4 +103,6 @@ def _flag(jf_id, delete_at, snapshot, season=None):
         "season_number": season,
         "delete_at": da,
         "reason_public": _public_reason(snapshot),
+        "token": make_unit_token(unit_type, unit_id),
+        **(actions or {}),
     }

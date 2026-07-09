@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { endpoints } from "../lib/api";
 import { PageHeader } from "./Dashboard";
 import { Button, EmptyState, Skeleton, Toggle } from "../components/ui";
-import { WhyPopover } from "../components/WhyPopover";
+import { Popover } from "../components/Popover";
 import { useToast } from "../components/Toast";
 import { gb } from "../lib/format";
 
@@ -229,11 +229,32 @@ function Builder({
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-bg">
       <div className="flex items-center gap-4 border-b border-line-subtle bg-bg-raised px-6 py-3.5">
-        <input
-          value={draft.name}
-          onChange={(e) => update({ name: e.target.value })}
-          className="w-52 bg-transparent text-[16px] font-semibold text-ink-hi outline-none"
-        />
+        <label
+          title="Rule name — click to edit"
+          className="group flex items-center gap-2 rounded-md border border-line bg-bg px-3 py-1.5 transition-colors focus-within:border-accent focus-within:ring-1 focus-within:ring-accent hover:border-ink-low"
+        >
+          <input
+            value={draft.name}
+            onChange={(e) => update({ name: e.target.value })}
+            placeholder="Rule name"
+            className="w-48 bg-transparent text-[16px] font-semibold text-ink-hi outline-none placeholder:text-ink-faint"
+          />
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="flex-none text-ink-low transition-colors group-focus-within:text-accent group-hover:text-ink-mid"
+            aria-hidden="true"
+          >
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+          </svg>
+        </label>
         <span
           className={`inline-flex items-center gap-1.5 rounded-pill px-3 py-1 text-[11px] font-bold tracking-[0.06em] ${
             draft.enabled
@@ -544,10 +565,7 @@ function PreviewMatchesModal({
                 <span className="font-mono text-[12px] text-ink-hi">
                   {gb(i.size_gb)}
                 </span>
-                <WhyPopover
-                  title="WHY WOULD THIS MATCH?"
-                  snapshot={i.snapshot}
-                />
+                <Popover title="WHY WOULD THIS MATCH?" snapshot={i.snapshot} />
               </div>
             ))}
           </div>

@@ -20,6 +20,9 @@ goes through the Sonarr/Radarr APIs so your `*arr` state stays consistent.
 - **Visible before destructive.** Everything appears on an *Upcoming Removals* board with a countdown
   and a one-tap **Keep** long before anything is deleted. The grace period *is* the safety model — no
   approval-gate friction, just an easy veto window.
+- **Two speeds of veto.** Admins choose whether household members can **request to keep** (admin
+  approves), self-service **delay** the removal by a fixed number of days (automatic, no queue, capped
+  per item), or both — whatever fits how hands-off you want to be.
 - **Preview before enable.** Rules are created **off**. The condition builder shows a live preview
   (full match list) with no side effects until you explicitly enable a rule.
 - **One system switch.** Pause the whole engine from Settings — no rules evaluate and nothing deletes
@@ -151,6 +154,13 @@ Managed in the admin **Settings** page and persisted in the `settings` table:
 
 - **Connections** — Jellyfin, Jellyseerr, Sonarr, Radarr, ntfy (test + save per service)
 - **System** — global on/off (`system_enabled`); when paused, no rules evaluate and nothing deletes
+- **Keep & delay options** — toggle household **keep requests** and self-service **delay**
+  independently, and set how many days each delay adds (`delay_days`) and how many times a single
+  item can be delayed (`delay_max_count`)
+- **Automatic protections** — independently toggle each *system* protection (Jellyfin favorites,
+  airing series, the `sweeparr-keep` arr tag) and the recently-requested window
+  (`request_protection_days`, in days; `0` disables it). These are the conditions that can push a
+  matched unit to **KEPT** without any admin action — see [Safety model](#safety-model-in-one-paragraph).
 - **Job schedules** — view next run time and manually trigger any sync or lifecycle job
 - **Account** — change local admin password
 
@@ -161,8 +171,10 @@ Managed in the admin **Settings** page and persisted in the `settings` table:
 | Local admin | Username + password from `.env` | Bootstrapped on first run; password changeable in Settings |
 | Jellyfin pass-through | Jellyfin admin users | Uses `/Users/AuthenticateByName`; requires Jellyfin configured |
 
-The admin console is the only authenticated UI. Household members can still **request to keep** media
-via magic links (`/keep/:token`) surfaced in Jellyfin inject banners — no separate login required.
+The admin console is the only authenticated UI. Household members can still **request to keep** or
+**self-delay** media via magic links (`/keep/:token`) surfaced in Jellyfin inject banners — no
+separate login required. Which of those two actions are offered (and for how many days) is controlled
+per-instance in **Settings → Keep & delay options**.
 
 ## Rules
 
@@ -188,17 +200,43 @@ list.
   ```
 
   It reads only public-safe fields from the cached `/flags` endpoint, renders a "Leaving <date>" pill
-  plus a dismissible banner with a one-tap **Request to keep** deep-link, and fails silently on any
-  Jellyfin DOM change.
+  plus a dismissible banner with **Request to keep** and/or **Delay N days** buttons (shown based on
+  what's enabled in Settings), and fails silently on any Jellyfin DOM change. Delaying is instant — no
+  admin approval, and no keep-request queue entry is created — while keep still routes through the
+  admin approval queue.
 
 ## Safety model in one paragraph
 
 Nothing is deleted the instant a rule matches. An **enabled** rule promotes matches to **SCHEDULED**
-with a grace countdown visible on the dashboard, in Jellyfin, and via notifications. Anyone can
-**Keep** during the window; a keep request pauses deletion until an admin decides. Only after the grace
-period — and only while the **system is running** — does `execute_deletions` re-verify protections
-and call Radarr/Sonarr. The whole path is logged. Disabling a rule or pausing the system stops new
-scheduling; existing scheduled items can still be kept or manually unscheduled.
+with a grace countdown visible on the dashboard, in Jellyfin, and via notifications. Two levers act on
+a scheduled item, and they live on different layers:
+
+- **Keep** is a protection-layer veto: an admin (directly, or by approving a household keep request)
+  moves the unit to **KEPT** indefinitely, taking it out of the rule pipeline entirely. It stays kept
+  until an admin **releases** it, which returns it to `ACTIVE` for normal evaluation. A *pending* keep
+  request pauses deletion (execution hold) until the admin decides; a denied request simply leaves the
+  item on its existing schedule.
+- **Delay** is a scheduling-layer nudge: one capped, floor-setting mechanism shared by admins and
+  Jellyfin users (no approval). It pushes `delete_at` out by `delay_days`, up to `delay_max_count`
+  times, and the rule engine's disk-pressure logic can never pull a delayed item earlier than its
+  floor. A delayed item stays **SCHEDULED**, so if it gets watched and the rule stops matching, the
+  daily reconciliation self-heals it back to `ACTIVE`.
+
+Only after the grace period — and only while the **system is running** — does `execute_deletions`
+re-verify protections and call Radarr/Sonarr. The whole path is logged, including every keep, release,
+and delay. Disabling a rule or pausing the system stops new scheduling; existing scheduled items can
+still be kept, delayed, or manually unscheduled.
+
+**KEPT isn't always an admin decision.** A matched unit can also land in KEPT because it currently
+trips one of the *system* protections — a Jellyfin favorite, the latest season of an airing show, the
+`sweeparr-keep` tag in Sonarr/Radarr, or a recent Jellyseerr request — each independently toggleable in
+**Settings → Automatic protections**. Whenever this happens, every reason is written to the
+`protection` table (not just logged) so the **Keeps** page can show exactly which condition(s) are
+holding an item, distinguishing it from an indefinite admin keep. An hourly `lift_protections` job
+re-checks every system-protected KEPT unit from scratch: the moment none of its reasons still apply
+(unfavorited, tag removed, request window passed, series ended), it's automatically returned to
+`ACTIVE` and the cleared reasons are written to the audit log. Admin keeps are never touched by this —
+they're indefinite until explicitly **released**.
 
 ## API surface (selected)
 
@@ -206,8 +244,13 @@ scheduling; existing scheduled items can still be kept or manually unscheduled.
 GET  /healthz                          liveness + integration health + system state
 GET  /api/v1/dashboard                 gauges, leaving-this-week, bytes-freed, health
 GET  /api/v1/schedule                  upcoming removals board
-POST /api/v1/units/{type}/{id}/keep    admin veto → KEPT
-POST /api/v1/keep-requests             household keep request (admin approves in UI)
+POST /api/v1/units/{type}/{id}/keep    admin veto → KEPT (indefinite)
+POST /api/v1/units/{type}/{id}/release admin unkeep → ACTIVE (re-enters evaluation)
+POST /api/v1/units/{type}/{id}/restore undo: replay a unit's prior lifecycle snapshot
+POST /api/v1/units/{type}/{id}/delay   admin delay (capped, sets floor; stays SCHEDULED)
+GET  /api/v1/kept                      all KEPT units + full protection list per unit (admin or system)
+POST /api/v1/keep-requests             household keep request (admin approves → indefinite keep)
+POST /api/v1/delay/{token}             public, token-authed self-service delay (no approval, capped)
 GET  /api/v1/rules · POST /rules/preview   rules CRUD + stateless preview
 POST /api/v1/rules/{id}/enable|disable     turn a rule on or off
 GET  /api/v1/rules/{id}/qc             rule quality-control diffs
@@ -238,7 +281,7 @@ backend/
 frontend/
   src/pages/      Dashboard · Upcoming · Rules · QC · Explorer · KeepRequests · History · Settings · Login
   src/pages/user/ KeepDeepLink (magic-link keep flow)
-  src/components/ StatusPill · Shell · WhyPopover · Drawer · Toast · ui
+  src/components/ StatusPill · Shell · Popover · Drawer · Toast · ui
 design/          design doc, original spec export, decode helpers (dev-only)
 .github/workflows/  CI (lint + build check) · publish (build & push to GHCR)
 Dockerfile · docker-compose.yml · docker-compose.ghcr.yml · .env.example · LICENSE
@@ -248,7 +291,9 @@ Dockerfile · docker-compose.yml · docker-compose.ghcr.yml · .env.example · L
 
 Sweeparr runs lightweight SQLite migrations on startup (`db.py`). Existing databases from older
 versions are migrated automatically — legacy `CANDIDATE` units become `ACTIVE`, armed rules become
-`enabled`, and removed columns (`status`, `dry_run_since`) are dropped.
+`enabled`, removed columns (`status`, `dry_run_since`) are dropped, and `delay_until`/`delay_count`
+columns are added to media items and seasons to back the self-service delay feature (self-service
+delay itself stays off — `delay_enabled: false` — until an admin turns it on in Settings).
 
 ## License
 

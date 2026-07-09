@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 
 export function Card({
   children,
@@ -24,11 +24,32 @@ export function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-export function Poster({ size = 40 }: { size?: number }) {
+export function Poster({
+  size = 40,
+  src,
+}: {
+  size?: number;
+  src?: string | null;
+}) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  const style = { width: size, height: size * 1.5 };
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className="inline-block flex-none rounded border border-line object-cover"
+        style={style}
+      />
+    );
+  }
   return (
     <span
       className="poster-placeholder inline-block flex-none rounded border border-line"
-      style={{ width: size, height: size * 1.5 }}
+      style={style}
     />
   );
 }

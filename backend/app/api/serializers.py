@@ -61,6 +61,13 @@ def _public_reason(snapshot: dict | None) -> str:
     return "Matched a removal rule"
 
 
+def _poster_url(item: MediaItem) -> str | None:
+    """Backend proxy path for the item's poster, when a Jellyfin id is known."""
+    if not item.jellyfin_id:
+        return None
+    return f"/api/v1/media/{item.id}/poster"
+
+
 async def serialize_movie(session: AsyncSession, item: MediaItem) -> dict[str, Any]:
     facts = await session.get(ItemWatchFacts, item.id)
     return {
@@ -69,6 +76,7 @@ async def serialize_movie(session: AsyncSession, item: MediaItem) -> dict[str, A
         "unit_id": item.id,
         "media_item_id": item.id,
         "title": item.title,
+        "poster_url": _poster_url(item),
         "year": item.year,
         "type": "movie",
         "library": item.library,
@@ -76,6 +84,8 @@ async def serialize_movie(session: AsyncSession, item: MediaItem) -> dict[str, A
         "state": item.state,
         "delete_at": _iso(item.delete_at),
         "days_until": _days_until(item.delete_at),
+        "delay_count": item.delay_count or 0,
+        "delay_until": _iso(item.delay_until),
         "rule_id": item.matched_rule_id,
         "rule_name": await _rule_name(session, item.matched_rule_id),
         "snapshot": item.match_snapshot,
@@ -101,6 +111,7 @@ async def serialize_season(
         "unit_id": season.id,
         "media_item_id": item.id,
         "title": item.title,
+        "poster_url": _poster_url(item),
         "season_number": season.season_number,
         "type": "series",
         "library": item.library,
@@ -109,6 +120,8 @@ async def serialize_season(
         "state": season.state,
         "delete_at": _iso(season.delete_at),
         "days_until": _days_until(season.delete_at),
+        "delay_count": season.delay_count or 0,
+        "delay_until": _iso(season.delay_until),
         "rule_id": season.matched_rule_id,
         "rule_name": await _rule_name(session, season.matched_rule_id),
         "snapshot": season.match_snapshot,

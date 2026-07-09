@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { endpoints } from "../lib/api";
+import { endpoints, unitSnapshot } from "../lib/api";
 import { PageHeader } from "./Dashboard";
 import { StatusPill } from "../components/StatusPill";
-import { WhyPopover } from "../components/WhyPopover";
+import { Popover } from "../components/Popover";
 import { Button, Chip, EmptyState, Poster, Skeleton } from "../components/ui";
 import { useToast } from "../components/Toast";
 import { countdown, gb } from "../lib/format";
@@ -15,7 +15,6 @@ export function Upcoming() {
   const navigate = useNavigate();
   const [view, setView] = useState<"calendar" | "list">("calendar");
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useQuery({
     queryKey: ["schedule"],
@@ -30,16 +29,29 @@ export function Upcoming() {
   }, [data, typeFilter]);
 
   async function keep(u: any) {
-    await endpoints.keepUnit(u.unit_type, u.unit_id, { days: 30 });
-    toast(`Kept ${u.title} for 30 days`, async () => {
-      await endpoints.unschedule(u.unit_type, u.unit_id);
+    const before = unitSnapshot(u);
+    await endpoints.keepUnit(u.unit_type, u.unit_id);
+    toast(`Kept ${u.title}`, async () => {
+      await endpoints.restore(u.unit_type, u.unit_id, before);
       qc.invalidateQueries();
     });
     qc.invalidateQueries();
   }
-  async function postpone(u: any) {
-    await endpoints.postpone(u.unit_type, u.unit_id, 30);
-    toast(`Postponed ${u.title} +30d`);
+  async function delay(u: any) {
+    const before = unitSnapshot(u);
+    try {
+      const r = await endpoints.delay(u.unit_type, u.unit_id);
+      toast(
+        `Delayed ${u.title}` +
+          (r.delay_remaining != null ? ` · ${r.delay_remaining} left` : ""),
+        async () => {
+          await endpoints.restore(u.unit_type, u.unit_id, before);
+          qc.invalidateQueries();
+        },
+      );
+    } catch (e: any) {
+      toast(e?.message?.includes("cap") ? "Delay cap reached" : "Cannot delay");
+    }
     qc.invalidateQueries();
   }
   async function deleteNow(u: any) {
@@ -117,10 +129,8 @@ export function Upcoming() {
       ) : (
         <ListView
           units={units}
-          selected={selected}
-          setSelected={setSelected}
           keep={keep}
-          postpone={postpone}
+          delay={delay}
           deleteNow={deleteNow}
           navigate={navigate}
         />
@@ -131,10 +141,9 @@ export function Upcoming() {
 
 function CalendarView({ units }: { units: any[] }) {
   const today = new Date();
-  const start = new Date(today);
-  const day = (start.getDay() + 6) % 7;
-  start.setDate(start.getDate() - day);
-  start.setHours(0, 0, 0, 0);
+  const [month, setMonth] = useState(
+    () => new Date(today.getFullYear(), today.getMonth(), 1),
+  );
 
   const byDay = new Map<string, any[]>();
   for (const u of units) {
@@ -144,9 +153,18 @@ function CalendarView({ units }: { units: any[] }) {
     byDay.get(key)!.push(u);
   }
 
-  const cells = Array.from({ length: 28 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
+  // Grid starts on the Monday on/before the 1st of the viewed month and spans
+  // whole weeks so the month is always complete.
+  const gridStart = new Date(month);
+  gridStart.setDate(1 - ((month.getDay() + 6) % 7));
+  gridStart.setHours(0, 0, 0, 0);
+  const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+  const leadingDays = (month.getDay() + 6) % 7;
+  const totalCells = Math.ceil((leadingDays + monthEnd.getDate()) / 7) * 7;
+
+  const cells = Array.from({ length: totalCells }, (_, i) => {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
     return d;
   });
   const maxCount = Math.max(
@@ -154,8 +172,42 @@ function CalendarView({ units }: { units: any[] }) {
     ...Array.from(byDay.values()).map((v) => v.length),
   );
 
+  const shiftMonth = (delta: number) =>
+    setMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1));
+  const monthLabel = month.toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+
   return (
     <div className="rounded-lg border border-line bg-bg p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <button
+          onClick={() => shiftMonth(-1)}
+          aria-label="Previous month"
+          className="flex h-7 w-7 items-center justify-center rounded border border-line text-ink-mid transition-colors hover:text-ink-hi"
+        >
+          ‹
+        </button>
+        <button
+          onClick={() => shiftMonth(1)}
+          aria-label="Next month"
+          className="flex h-7 w-7 items-center justify-center rounded border border-line text-ink-mid transition-colors hover:text-ink-hi"
+        >
+          ›
+        </button>
+        <span className="ml-1 text-[14px] font-semibold text-ink-hi">
+          {monthLabel}
+        </span>
+        <button
+          onClick={() =>
+            setMonth(new Date(today.getFullYear(), today.getMonth(), 1))
+          }
+          className="ml-auto rounded border border-line px-3 py-1 text-[12px] text-ink-mid transition-colors hover:text-ink-hi"
+        >
+          Today
+        </button>
+      </div>
       <div className="mb-1 grid grid-cols-7 gap-1.5">
         {["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map((d) => (
           <div
@@ -170,12 +222,13 @@ function CalendarView({ units }: { units: any[] }) {
         {cells.map((d, i) => {
           const items = byDay.get(d.toDateString()) ?? [];
           const isToday = d.toDateString() === today.toDateString();
+          const inMonth = d.getMonth() === month.getMonth();
           const hasItems = items.length > 0;
           const heat = Math.round((items.length / maxCount) * 100);
           return (
             <div
               key={i}
-              className="relative flex h-40 flex-col gap-1 overflow-hidden rounded-lg p-2"
+              className={`relative flex h-40 flex-col gap-1 overflow-hidden rounded-lg p-2 ${inMonth ? "" : "opacity-40"}`}
               style={{
                 background: hasItems ? "#0C0F16" : "#0A0D12",
                 border: isToday
@@ -197,22 +250,33 @@ function CalendarView({ units }: { units: any[] }) {
                 >
                   {d.getDate()}
                 </span>
-                {isToday && (
+                {isToday ? (
                   <span className="text-[10px] text-ink-low">today</span>
+                ) : (
+                  items.length > 3 && (
+                    <span className="font-mono text-[9.5px] text-state-scheduled-ink">
+                      {items.length} leaving
+                    </span>
+                  )
                 )}
               </div>
               {items.slice(0, 3).map((u) => (
                 <div
                   key={u.key}
-                  className="truncate rounded border border-line-subtle bg-bg-raised px-1.5 py-1 text-[10px] text-ink-hi"
+                  className="flex items-center gap-1 overflow-hidden rounded border border-line-subtle bg-bg-raised px-1.5 py-1 text-[10px] text-ink-hi"
                 >
-                  {u.title}
-                  {u.season_number ? ` S${u.season_number}` : ""}
+                  <span className="truncate">{u.title}</span>
+                  {u.season_number ? (
+                    <span className="flex-none font-mono text-[9px] text-ink-low">
+                      S{u.season_number}
+                    </span>
+                  ) : null}
                 </div>
               ))}
               {items.length > 3 && (
                 <div className="mt-auto rounded bg-[rgba(229,72,77,0.1)] px-1 py-0.5 text-center font-mono text-[9.5px] text-state-scheduled-ink">
-                  +{items.length - 3} more
+                  +{items.length - 3} more ·{" "}
+                  {gb(items.reduce((a, x) => a + x.size_gb, 0))}
                 </div>
               )}
               {hasItems && items.length <= 3 && (
@@ -229,35 +293,18 @@ function CalendarView({ units }: { units: any[] }) {
   );
 }
 
-function ListView({
-  units,
-  selected,
-  setSelected,
-  keep,
-  postpone,
-  deleteNow,
-  navigate,
-}: any) {
+function ListView({ units, keep, delay, deleteNow, navigate }: any) {
   const cols =
-    "grid-cols-[36px_56px_minmax(180px,1.4fr)_220px_120px_1fr_90px_190px]";
-  const toggle = (k: string) => {
-    const next = new Set<string>(selected);
-    next.has(k) ? next.delete(k) : next.add(k);
-    setSelected(next);
-  };
+    "grid-cols-[56px_minmax(180px,1.4fr)_220px_120px_1fr_90px_190px]";
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-bg">
       <div className="flex items-center gap-3 border-b border-line-subtle bg-bg-raised px-6 py-3.5 text-[12.5px] text-ink-mid">
         <span>List view · sorted by delete date (errors pinned)</span>
-        {selected.size > 0 && (
-          <span className="ml-auto text-ink-hi">{selected.size} selected</span>
-        )}
       </div>
       <div
         className={`grid ${cols} gap-x-3 border-b border-line-subtle px-6 py-2`}
       >
         {[
-          "",
           "",
           "TITLE",
           "STATUS",
@@ -268,7 +315,7 @@ function ListView({
         ].map((h, i) => (
           <span
             key={i}
-            className={`text-[10.5px] font-semibold tracking-[0.08em] text-ink-low ${i >= 6 ? "text-right" : ""}`}
+            className={`text-[10.5px] font-semibold tracking-[0.08em] text-ink-low ${i >= 5 ? "text-right" : ""}`}
           >
             {h}
           </span>
@@ -281,17 +328,7 @@ function ListView({
             key={u.key}
             className={`grid ${cols} items-center gap-x-3 border-b border-[#141A26] px-6 py-2`}
           >
-            <span>
-              {u.state !== "ERROR" && (
-                <input
-                  type="checkbox"
-                  checked={selected.has(u.key)}
-                  onChange={() => toggle(u.key)}
-                  className="h-3.5 w-3.5 accent-accent"
-                />
-              )}
-            </span>
-            <Poster size={40} />
+            <Poster size={40} src={u.poster_url} />
             <span>
               <button
                 onClick={() => navigate("/library")}
@@ -309,11 +346,21 @@ function ListView({
                 {u.last_watched_days != null
                   ? ` · last watched ${u.last_watched_days}d ago`
                   : ""}
+                {u.delay_count > 0 ? (
+                  <span className="ml-1 text-state-candidate-ink">
+                    · delayed x{u.delay_count}
+                  </span>
+                ) : null}
               </span>
             </span>
             <span className="flex items-center gap-1.5">
-              <StatusPill state={u.state} size="sm" date={u.delete_at} />
-              <WhyPopover ruleName={u.rule_name} snapshot={u.snapshot} />
+              <StatusPill
+                state={u.state}
+                size="sm"
+                date={u.delete_at}
+                delayCount={u.delay_count}
+              />
+              <Popover ruleName={u.rule_name} snapshot={u.snapshot} />
             </span>
             <span>
               {u.state === "ERROR" ? (
@@ -359,8 +406,8 @@ function ListView({
                   <Button size="sm" variant="keep" onClick={() => keep(u)}>
                     ✓ Keep
                   </Button>
-                  <Button size="sm" onClick={() => postpone(u)}>
-                    +30d
+                  <Button size="sm" onClick={() => delay(u)}>
+                    Delay
                   </Button>
                 </>
               )}
@@ -368,37 +415,6 @@ function ListView({
           </div>
         );
       })}
-      {selected.size > 0 && (
-        <BulkBar
-          units={units}
-          selected={selected}
-          keep={keep}
-          postpone={postpone}
-          deleteNow={deleteNow}
-        />
-      )}
-    </div>
-  );
-}
-
-function BulkBar({ units, selected, keep, postpone, deleteNow }: any) {
-  const chosen = units.filter((u: any) => selected.has(u.key));
-  return (
-    <div className="flex items-center gap-3 border-t border-line-subtle bg-bg-raised px-6 py-3">
-      <span className="text-[12px] text-ink-mid">{chosen.length} selected</span>
-      <Button size="sm" variant="keep" onClick={() => chosen.forEach(keep)}>
-        ✓ Keep
-      </Button>
-      <Button size="sm" onClick={() => chosen.forEach(postpone)}>
-        Postpone +30d
-      </Button>
-      <Button
-        size="sm"
-        variant="danger"
-        onClick={() => chosen.forEach(deleteNow)}
-      >
-        Delete now
-      </Button>
     </div>
   );
 }

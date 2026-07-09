@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -138,7 +138,9 @@ async def protection_reasons(session: AsyncSession, unit: Unit) -> list[dict[str
         )
 
     facts_tags = await build_facts(session, unit)
-    if "sweeparr-keep" in (facts_tags.get("has_tag") or []):
+    if settings.get("tag_protects") and "sweeparr-keep" in (
+        facts_tags.get("has_tag") or []
+    ):
         reasons.append({"kind": "tag", "detail": "sweeparr-keep tag in arr"})
 
     if settings.get("favorite_protects") and facts_tags.get("is_favorite_any_user"):
@@ -164,28 +166,53 @@ async def protection_reasons(session: AsyncSession, unit: Unit) -> list[dict[str
             }
         )
 
-    kq = (
+    keeps = (
         (
             await session.execute(
-                select(KeepRequest).where(
-                    KeepRequest.unit_type == unit.type,
-                    KeepRequest.unit_id == unit.id,
-                    KeepRequest.status.in_(["approved", "pending"]),
+                select(Protection).where(
+                    Protection.unit_type == unit.type,
+                    Protection.unit_id == unit.id,
+                    Protection.kind == "keep",
                 )
             )
         )
         .scalars()
         .all()
     )
-    for k in kq:
-        if k.status == "pending":
-            reasons.append(
-                {"kind": "keep", "detail": "Keep request pending admin decision"}
-            )
-        elif k.expires_at is None or _aware(k.expires_at) > utcnow():
-            who = f"user #{k.user_id}" if k.user_id else "admin"
-            reasons.append({"kind": "keep", "detail": f"Kept by {who}"})
+    for k in keeps:
+        reasons.append({"kind": "keep", "detail": k.detail or "Kept by admin"})
     return reasons
+
+
+async def _sync_protection_ledger(
+    session: AsyncSession, unit: Unit, protections: list[dict[str, Any]]
+) -> None:
+    """Persist the unit's current non-keep protection reasons (replace-all).
+
+    This is the durable, queryable record behind "why is this kept" on the
+    Keeps page, and the input ``run_lift_protections`` diffs against: once
+    none of these still apply on re-check, the unit is auto-released.
+    Admin keeps (``kind="keep"``) are a separate, indefinite ledger entry
+    owned by ``keep_unit``/``release_unit`` and are left untouched here.
+    """
+    await session.execute(
+        delete(Protection).where(
+            Protection.unit_type == unit.type,
+            Protection.unit_id == unit.id,
+            Protection.kind != "keep",
+        )
+    )
+    for p in protections:
+        if p["kind"] == "keep":
+            continue
+        session.add(
+            Protection(
+                unit_type=unit.type,
+                unit_id=unit.id,
+                kind=p["kind"],
+                detail=p.get("detail"),
+            )
+        )
 
 
 def _aware(dt: datetime) -> datetime:
@@ -265,6 +292,8 @@ async def run_evaluate_rules(session: AsyncSession) -> dict[str, Any]:
                 obj.delete_at = utcnow() + timedelta(days=grace)
                 obj.matched_rule_id = rule.id
                 obj.match_snapshot = m["snapshot"]
+                obj.delay_until = None
+                obj.delay_count = 0
                 scheduled += 1
                 _audit(
                     session,
@@ -288,6 +317,10 @@ async def run_evaluate_rules(session: AsyncSession) -> dict[str, Any]:
                 and obj.matched_rule_id == rule.id
             ):
                 new_at = utcnow() + timedelta(days=grace)
+                # A user-set delay is a hard floor: never pull deletion earlier.
+                floor = _aware(obj.delay_until) if obj.delay_until else None
+                if floor and new_at < floor:
+                    new_at = floor
                 if obj.delete_at and new_at < _aware(obj.delete_at):
                     obj.delete_at = new_at
                     _audit(
@@ -336,6 +369,8 @@ async def _demote_stale(
                 obj.delete_at = None
                 obj.matched_rule_id = None
                 obj.match_snapshot = None
+                obj.delay_until = None
+                obj.delay_count = 0
 
 
 def _audit(
@@ -361,10 +396,17 @@ async def _to_kept(
     session: AsyncSession, unit: Unit, rule: Optional[RuleSet], protections, actor: str
 ) -> None:
     obj = unit.obj
-    if obj.state in (LifecycleState.DELETING.value, LifecycleState.DELETED.value):
+    if obj.state in (
+        LifecycleState.DELETING.value,
+        LifecycleState.DELETED.value,
+        LifecycleState.KEPT.value,
+    ):
         return
     obj.state = LifecycleState.KEPT.value
     obj.delete_at = None
+    obj.delay_until = None
+    obj.delay_count = 0
+    await _sync_protection_ledger(session, unit, protections)
     detail = {"reasons": protections}
     if rule:
         detail["rule"] = rule.name
@@ -378,28 +420,41 @@ async def keep_unit(
     session: AsyncSession,
     unit: Unit,
     *,
-    days: Optional[int],
     actor: str,
     reason: str | None = None,
 ) -> None:
+    """Indefinite, admin-gated veto: pull the unit out of the rule pipeline.
+
+    Writes a ``keep`` Protection row (read by ``protection_reasons``) so the
+    unit stays off-limits to rules until an admin explicitly releases it. Any
+    leftover system-protection ledger rows are cleared first — an explicit
+    admin keep always supersedes and replaces them.
+    """
     obj = unit.obj
     obj.state = LifecycleState.KEPT.value
     obj.delete_at = None
-    expires = (utcnow() + timedelta(days=days)) if days else None
+    obj.delay_until = None
+    obj.delay_count = 0
+    await session.execute(
+        delete(Protection).where(
+            Protection.unit_type == unit.type,
+            Protection.unit_id == unit.id,
+        )
+    )
     session.add(
         Protection(
             unit_type=unit.type,
             unit_id=unit.id,
             kind="keep",
             detail=reason or f"kept by {actor}",
-            expires_at=expires,
+            expires_at=None,
         )
     )
     _audit(
         session,
         unit,
         "kept",
-        {"days": days, "reason": reason, "by": actor},
+        {"reason": reason, "by": actor},
         actor=actor,
     )
     await session.commit()
@@ -422,26 +477,147 @@ async def unschedule_unit(session: AsyncSession, unit: Unit, *, actor: str) -> N
     obj.state = LifecycleState.ACTIVE.value
     obj.delete_at = None
     obj.matched_rule_id = None
+    obj.delay_until = None
+    obj.delay_count = 0
     _audit(session, unit, "unscheduled", {"by": actor}, actor=actor)
     await session.commit()
     publish("unit_changed", {"key": unit.key, "state": obj.state})
 
 
-async def postpone_unit(
-    session: AsyncSession, unit: Unit, *, days: int, actor: str
-) -> None:
+async def release_unit(session: AsyncSession, unit: Unit, *, actor: str) -> None:
+    """Reverse a Keep (admin or system): clear the protection ledger and
+    return the unit to ACTIVE. The unit re-enters normal rule evaluation on
+    the next cycle. Whatever was protecting it is recorded on the audit row
+    for traceability, even if it was a system protection with no admin action.
+    """
+    cleared = (
+        await session.execute(
+            select(Protection.kind, Protection.detail).where(
+                Protection.unit_type == unit.type,
+                Protection.unit_id == unit.id,
+            )
+        )
+    ).all()
+    await session.execute(
+        delete(Protection).where(
+            Protection.unit_type == unit.type,
+            Protection.unit_id == unit.id,
+        )
+    )
     obj = unit.obj
-    base = _aware(obj.delete_at) if obj.delete_at else utcnow()
-    obj.delete_at = base + timedelta(days=days)
+    obj.state = LifecycleState.ACTIVE.value
+    obj.delete_at = None
+    obj.matched_rule_id = None
+    obj.match_snapshot = None
+    obj.delay_until = None
+    obj.delay_count = 0
     _audit(
         session,
         unit,
-        "postponed",
-        {"days": days, "by": actor, "delete_at": obj.delete_at.isoformat()},
+        "released",
+        {"by": actor, "cleared": [{"kind": k, "detail": d} for k, d in cleared]},
         actor=actor,
     )
     await session.commit()
-    publish("unit_changed", {"key": unit.key, "delete_at": obj.delete_at.isoformat()})
+    publish("unit_changed", {"key": unit.key, "state": obj.state})
+
+
+def _parse_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    return _aware(datetime.fromisoformat(value))
+
+
+async def restore_unit(
+    session: AsyncSession,
+    unit: Unit,
+    *,
+    state: str,
+    delete_at: str | None,
+    delay_until: str | None,
+    delay_count: int,
+    matched_rule_id: int | None,
+    actor: str,
+) -> None:
+    """Undo: restore a unit's prior lifecycle snapshot after a keep/delay.
+
+    When restoring to a non-KEPT state we drop the whole protection ledger
+    (this is the reversal of a Keep); delays never add protection rows, so
+    the delete is a safe no-op.
+    """
+    if state != LifecycleState.KEPT.value:
+        await session.execute(
+            delete(Protection).where(
+                Protection.unit_type == unit.type,
+                Protection.unit_id == unit.id,
+            )
+        )
+    obj = unit.obj
+    obj.state = state
+    obj.delete_at = _parse_dt(delete_at)
+    obj.delay_until = _parse_dt(delay_until)
+    obj.delay_count = delay_count or 0
+    obj.matched_rule_id = matched_rule_id
+    _audit(session, unit, "restored", {"state": state, "by": actor}, actor=actor)
+    await session.commit()
+    publish("unit_changed", {"key": unit.key, "state": obj.state})
+
+
+async def delay_unit(
+    session: AsyncSession,
+    unit: Unit,
+    *,
+    days: int,
+    max_count: int,
+    actor: str,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Self-service delay: push delete_at forward by ``days`` and pin a hard floor.
+
+    Stays SCHEDULED (no admin approval, no keep-request row). Capped to
+    ``max_count`` delays per scheduled window. Returns a result dict; the unit is
+    only mutated when ``ok`` is True.
+    """
+    obj = unit.obj
+    if obj.state != LifecycleState.SCHEDULED.value:
+        return {"ok": False, "reason": "not_scheduled"}
+    if (obj.delay_count or 0) >= max_count:
+        return {
+            "ok": False,
+            "reason": "capped",
+            "delay_count": obj.delay_count or 0,
+            "delay_remaining": 0,
+        }
+
+    base = _aware(obj.delete_at) if obj.delete_at else utcnow()
+    if base < utcnow():
+        base = utcnow()
+    new_at = base + timedelta(days=days)
+    obj.delete_at = new_at
+    obj.delay_until = new_at
+    obj.delay_count = (obj.delay_count or 0) + 1
+    remaining = max(0, max_count - obj.delay_count)
+    _audit(
+        session,
+        unit,
+        "delayed",
+        {
+            "days": days,
+            "count": obj.delay_count,
+            "delete_at": new_at.isoformat(),
+            "reason": reason,
+            "by": actor,
+        },
+        actor=actor,
+    )
+    await session.commit()
+    publish("unit_changed", {"key": unit.key, "delete_at": new_at.isoformat()})
+    return {
+        "ok": True,
+        "delete_at": new_at.isoformat(),
+        "delay_count": obj.delay_count,
+        "delay_remaining": remaining,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -499,6 +675,22 @@ async def run_execute_deletions(
         )
         if rule and not rule.enabled and not force:
             continue
+
+        # Execution hold: a pending keep request pauses deletion until an admin
+        # decides. The unit stays SCHEDULED (visible, still counting down).
+        pending_keep = (
+            await session.execute(
+                select(KeepRequest).where(
+                    KeepRequest.unit_type == unit.type,
+                    KeepRequest.unit_id == unit.id,
+                    KeepRequest.status == "pending",
+                )
+            )
+        ).scalar_one_or_none()
+        if pending_keep is not None:
+            results.append({"unit": unit.key, "result": "held_pending_keep"})
+            continue
+
         obj.state = LifecycleState.DELETING.value
         await session.commit()
 
@@ -572,6 +764,80 @@ async def _execute_one(
         remaining = await integ.sonarr.season_file_ids(series_id, season.season_number)
         if remaining:
             raise RuntimeError("Sonarr season still has files after delete")
+
+
+async def run_lift_protections(session: AsyncSession) -> dict[str, Any]:
+    """Re-check every system-protected KEPT unit and auto-release the ones
+    whose protection has cleared (unfavorited, tag removed, series ended,
+    request window passed, etc).
+
+    Admin keeps (a ``Protection(kind="keep")`` row) are indefinite and are
+    never touched here — only a manual Release lifts those. Everything else
+    in KEPT got there via a live condition, so it's re-derived from scratch
+    on every run and the unit is dropped back to ACTIVE the moment nothing
+    protects it anymore, with the cleared reasons written to the audit log.
+    """
+    if not await is_system_enabled(session):
+        return {"skipped": "system_off"}
+
+    checked = 0
+    released = 0
+    for model, utype in ((MediaItem, UnitType.movie.value), (Season, "season")):
+        rows = (
+            (
+                await session.execute(
+                    select(model).where(model.state == LifecycleState.KEPT.value)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for obj in rows:
+            has_admin_keep = (
+                await session.execute(
+                    select(Protection.id).where(
+                        Protection.unit_type == utype,
+                        Protection.unit_id == obj.id,
+                        Protection.kind == "keep",
+                    )
+                )
+            ).scalar_one_or_none()
+            if has_admin_keep is not None:
+                continue
+            unit = await get_unit(session, utype, obj.id)
+            if unit is None:
+                continue
+            checked += 1
+            was_protected_by = (
+                await session.execute(
+                    select(Protection.kind, Protection.detail).where(
+                        Protection.unit_type == utype,
+                        Protection.unit_id == obj.id,
+                    )
+                )
+            ).all()
+            protections = await protection_reasons(session, unit)
+            await _sync_protection_ledger(session, unit, protections)
+            if not protections:
+                obj.state = LifecycleState.ACTIVE.value
+                obj.matched_rule_id = None
+                obj.match_snapshot = None
+                _audit(
+                    session,
+                    unit,
+                    "auto_released",
+                    {
+                        "was_protected_by": [
+                            {"kind": k, "detail": d} for k, d in was_protected_by
+                        ]
+                    },
+                    actor="system",
+                )
+                released += 1
+    await session.commit()
+    if released:
+        publish("unit_changed", {"auto_released": released})
+    return {"checked": checked, "released": released}
 
 
 async def scheduled_count(session: AsyncSession) -> int:

@@ -18,8 +18,10 @@ from ..models import (
     ItemWatchFacts,
     MediaItem,
     PlaybackSession,
+    Request,
     Season,
     SeasonWatchFacts,
+    User,
     utcnow,
 )
 from .integrations import get_integrations
@@ -286,6 +288,19 @@ async def _sync_jellyfin_watch_stats(session: AsyncSession, jf) -> dict[str, Any
     if not by_jf_id:
         return {"watch_items": 0, "watch_seasons": 0}
 
+    # media_item_id → Jellyfin ids of everyone who requested it, so we can flag
+    # items the requester actually watched (rule field ``watched_by_requester``).
+    requester_jf_ids: dict[int, set[str]] = {}
+    rows = (
+        await session.execute(
+            select(Request.media_item_id, User.jellyfin_id)
+            .join(User, Request.requester_user_id == User.id)
+            .where(Request.media_item_id.isnot(None), User.jellyfin_id.isnot(None))
+        )
+    ).all()
+    for media_item_id, jf_id in rows:
+        requester_jf_ids.setdefault(media_item_id, set()).add(jf_id)
+
     item_acc: dict[int, _WatchAccum] = {}
     season_acc: dict[int, _WatchAccum] = {}
     series_watched_eps: dict[int, set[str]] = {}
@@ -335,6 +350,9 @@ async def _sync_jellyfin_watch_stats(session: AsyncSession, jf) -> dict[str, Any
         facts.last_watched_at = acc.last_watched
         facts.max_completion_pct = acc.max_completion
         facts.is_favorite_any_user = acc.favorite
+        facts.watched_by_requester = bool(
+            acc.watchers & requester_jf_ids.get(item_id, set())
+        )
         total_eps = episode_totals.get(item_id, 0)
         watched_eps = len(series_watched_eps.get(item_id, set()))
         facts.pct_episodes_watched = (
@@ -363,15 +381,200 @@ async def _sync_jellyfin_watch_stats(session: AsyncSession, jf) -> dict[str, Any
     }
 
 
+# Jellyseerr MediaRequestStatus / MediaStatus enums → readable strings.
+_REQUEST_STATUS = {
+    1: "pending",
+    2: "approved",
+    3: "declined",
+    4: "failed",
+    5: "completed",
+}
+_MEDIA_STATUS = {
+    1: "unknown",
+    2: "pending",
+    3: "processing",
+    4: "partial",
+    5: "available",
+}
+
+
+def _request_status(req: dict[str, Any]) -> str:
+    """Prefer media availability when known, else the request lifecycle status."""
+    media_status = (req.get("media") or {}).get("status")
+    if media_status in (4, 5):
+        return _MEDIA_STATUS[media_status]
+    return _REQUEST_STATUS.get(req.get("status"), "unknown")
+
+
+def _js_user_name(raw: dict[str, Any]) -> str:
+    for key in ("displayName", "jellyfinUsername", "plexUsername", "username", "email"):
+        val = raw.get(key)
+        if val:
+            return str(val)
+    return "unknown"
+
+
+class _UserCaches:
+    """Lookup tables so re-syncs reuse existing rows instead of duplicating."""
+
+    def __init__(self) -> None:
+        self.by_js: dict[int, User] = {}
+        self.by_jf: dict[str, User] = {}
+        self.by_email: dict[str, User] = {}
+
+    @classmethod
+    async def load(cls, session: AsyncSession) -> "_UserCaches":
+        caches = cls()
+        for u in (await session.execute(select(User))).scalars().all():
+            caches.index(u)
+        return caches
+
+    def index(self, user: User) -> None:
+        if user.jellyseerr_id is not None:
+            self.by_js[user.jellyseerr_id] = user
+        if user.jellyfin_id:
+            self.by_jf[user.jellyfin_id] = user
+        if user.email:
+            self.by_email[user.email.lower()] = user
+
+
+async def _upsert_js_user(
+    session: AsyncSession, raw: dict[str, Any], caches: _UserCaches
+) -> Optional[User]:
+    """Upsert a Jellyseerr user, linking to an existing Jellyfin-synced row.
+
+    Match priority (§4): Jellyseerr id → Jellyfin id → email. This keeps a single
+    ``user`` row per person even though Jellyfin login and Jellyseerr both create
+    users, and makes re-syncs idempotent.
+    """
+    js_id = raw.get("id")
+    jf_id = raw.get("jellyfinUserId")
+    email = raw.get("email")
+    email_key = email.lower() if email else None
+
+    user = None
+    if js_id is not None:
+        user = caches.by_js.get(js_id)
+    if user is None and jf_id:
+        user = caches.by_jf.get(jf_id)
+    if user is None and email_key:
+        user = caches.by_email.get(email_key)
+
+    if user is None:
+        user = User(name=_js_user_name(raw))
+        session.add(user)
+
+    if js_id is not None:
+        user.jellyseerr_id = js_id
+    if jf_id and not user.jellyfin_id:
+        user.jellyfin_id = jf_id
+    if email:
+        user.email = email
+    # Only overwrite a placeholder-ish name; don't clobber a Jellyfin login name.
+    if not user.name or user.name == "unknown":
+        user.name = _js_user_name(raw)
+
+    caches.index(user)
+    return user
+
+
 async def sync_jellyseerr(session: AsyncSession) -> dict[str, Any]:
+    """Pull Jellyseerr users + requests into the local DB (§5.3).
+
+    Idempotent upsert: users are deduped by Jellyseerr/Jellyfin id or email, and
+    requests by ``(jellyseerr_id, season_number)`` so repeated runs update rows in
+    place rather than inserting duplicates.
+    """
     js = get_integrations().jellyseerr
     if not js.configured:
         return {"skipped": "not configured"}
     try:
-        requests = await js.get_requests()
+        js_users = await js.get_all_users()
+        js_requests = await js.get_all_requests()
     except Exception as exc:  # noqa: BLE001
         return {"error": str(exc)}
-    return {"requests_seen": len(requests)}
+
+    caches = await _UserCaches.load(session)
+    for raw in js_users:
+        await _upsert_js_user(session, raw, caches)
+    await session.flush()
+
+    # Existing requests keyed by (jellyseerr_id, season_number) for in-place update.
+    existing: dict[tuple[int, Optional[int]], Request] = {}
+    for r in (await session.execute(select(Request))).scalars().all():
+        if r.jellyseerr_id is not None:
+            existing[(r.jellyseerr_id, r.season_number)] = r
+
+    upserted = 0
+    matched = 0
+    seen: set[tuple[int, Optional[int]]] = set()
+
+    def _int(val: Any) -> Optional[int]:
+        try:
+            return int(val) if val not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+
+    for r in js_requests:
+        js_req_id = r.get("id")
+        if js_req_id is None:
+            continue
+        media_block = r.get("media") or {}
+        item = await _match_by_ids(
+            session,
+            tmdb=_int(media_block.get("tmdbId")),
+            tvdb=_int(media_block.get("tvdbId")),
+            imdb=media_block.get("imdbId"),
+        )
+        if item is not None:
+            matched += 1
+
+        requester = None
+        requested_by = r.get("requestedBy") or {}
+        if requested_by:
+            requester = await _upsert_js_user(session, requested_by, caches)
+            await session.flush()
+
+        requested_at = _parse_dt(r.get("createdAt"))
+        status = _request_status(r)
+
+        seasons = r.get("seasons") or []
+        season_numbers: list[Optional[int]] = (
+            [s.get("seasonNumber") for s in seasons if s.get("seasonNumber")]
+            if seasons
+            else [None]
+        )
+
+        for season_number in season_numbers:
+            key = (js_req_id, season_number)
+            if key in seen:
+                continue
+            seen.add(key)
+            req = existing.get(key)
+            if req is None:
+                req = Request(jellyseerr_id=js_req_id, season_number=season_number)
+                session.add(req)
+                existing[key] = req
+            req.media_item_id = item.id if item else None
+            req.requester_user_id = requester.id if requester else None
+            req.requested_at = requested_at
+            req.status = status
+            upserted += 1
+
+    # Prune requests that no longer exist in Jellyseerr so history stays accurate.
+    pruned = 0
+    for key, req in list(existing.items()):
+        if key not in seen:
+            await session.delete(req)
+            pruned += 1
+
+    await session.commit()
+    return {
+        "users_synced": len(caches.by_js),
+        "requests_upserted": upserted,
+        "requests_matched": matched,
+        "requests_pruned": pruned,
+    }
 
 
 async def aggregate_playback(session: AsyncSession) -> dict[str, Any]:

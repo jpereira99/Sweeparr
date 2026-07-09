@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { endpoints } from "../lib/api";
+import { endpoints, unitSnapshot } from "../lib/api";
 import { PageHeader } from "./Dashboard";
 import {
   Card,
@@ -9,10 +9,19 @@ import {
   Skeleton,
   EmptyState,
 } from "../components/ui";
-import { WhyPopover } from "../components/WhyPopover";
+import { Popover } from "../components/Popover";
 import { StatusPill } from "../components/StatusPill";
 import { useToast } from "../components/Toast";
 import { gb } from "../lib/format";
+
+// A manual keep already reads "KEPT"; only non-keep protections need a suffix.
+const PROTECTION_LABEL: Record<string, string> = {
+  favorite: "favorite",
+  tag: "tag",
+  airing: "airing",
+  request_window: "requested",
+  unmanaged: "unmanaged",
+};
 
 export function QC() {
   const qc = useQueryClient();
@@ -38,8 +47,26 @@ export function QC() {
   });
 
   async function keep(m: any) {
-    await endpoints.keepUnit(m.unit_type, m.unit_id, { days: 30 });
-    toast(`Kept ${m.title}`);
+    const before = unitSnapshot(m);
+    await endpoints.keepUnit(m.unit_type, m.unit_id);
+    toast(`Kept ${m.title}`, async () => {
+      await endpoints.restore(m.unit_type, m.unit_id, before);
+      qc.invalidateQueries();
+    });
+    qc.invalidateQueries();
+  }
+
+  async function delay(m: any) {
+    const before = unitSnapshot(m);
+    try {
+      await endpoints.delay(m.unit_type, m.unit_id);
+      toast(`Delayed ${m.title}`, async () => {
+        await endpoints.restore(m.unit_type, m.unit_id, before);
+        qc.invalidateQueries();
+      });
+    } catch {
+      toast("Cannot delay");
+    }
     qc.invalidateQueries();
   }
 
@@ -147,7 +174,7 @@ export function QC() {
             </EmptyState>
           ) : (
             <div className="overflow-hidden rounded-lg border border-line bg-bg">
-              <div className="grid grid-cols-[minmax(180px,1.4fr)_180px_100px_1fr_110px] gap-x-3 border-b border-line-subtle px-6 py-2">
+              <div className="grid grid-cols-[minmax(180px,1.4fr)_180px_100px_1fr_170px] gap-x-3 border-b border-line-subtle px-6 py-2">
                 {["TITLE", "STATE", "FREES", "SNAPSHOT", "ACTION"].map(
                   (h, i) => (
                     <span
@@ -162,7 +189,7 @@ export function QC() {
               {data.matches.map((m: any) => (
                 <div
                   key={m.key}
-                  className="grid grid-cols-[minmax(180px,1.4fr)_180px_100px_1fr_110px] items-center gap-x-3 border-b border-[#141A26] px-6 py-2"
+                  className="grid grid-cols-[minmax(180px,1.4fr)_180px_100px_1fr_170px] items-center gap-x-3 border-b border-[#141A26] px-6 py-2"
                 >
                   <span className="text-[13px] font-medium text-ink-hi">
                     {m.title}
@@ -177,10 +204,14 @@ export function QC() {
                       <StatusPill
                         state="KEPT"
                         size="sm"
-                        reason={m.protections?.[0]?.kind}
+                        reason={PROTECTION_LABEL[m.protections?.[0]?.kind]}
                       />
                     ) : (
-                      <StatusPill state={m.state} size="sm" />
+                      <StatusPill
+                        state={m.state}
+                        size="sm"
+                        delayCount={m.delay_count}
+                      />
                     )}
                   </span>
                   <span className="font-mono text-[12px] text-ink-hi">
@@ -192,16 +223,22 @@ export function QC() {
                         .slice(0, 1)
                         .map(([k, v]: any) => `${k}=${v.value}`)}
                     </span>
-                    <WhyPopover
-                      ruleName={data.rule.name}
-                      snapshot={m.snapshot}
-                    />
+                    <Popover ruleName={data.rule.name} snapshot={m.snapshot} />
                   </span>
-                  <span className="flex justify-end">
+                  <span className="flex justify-end gap-1.5">
                     {!m.protected && (
-                      <Button size="sm" variant="keep" onClick={() => keep(m)}>
-                        ✓ Keep
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="keep"
+                          onClick={() => keep(m)}
+                        >
+                          ✓ Keep
+                        </Button>
+                        <Button size="sm" onClick={() => delay(m)}>
+                          Delay
+                        </Button>
+                      </>
                     )}
                   </span>
                 </div>

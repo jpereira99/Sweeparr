@@ -131,7 +131,18 @@ export function Dashboard() {
                         onClick={() => navigate("/upcoming")}
                         className="w-16 flex-none text-left"
                       >
-                        <div className="poster-placeholder relative h-24 w-16 rounded border border-line">
+                        <div className="poster-placeholder relative h-24 w-16 overflow-hidden rounded border border-line">
+                          {u.poster_url && (
+                            <img
+                              src={u.poster_url}
+                              alt=""
+                              loading="lazy"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                              className="absolute inset-0 h-full w-full object-cover"
+                            />
+                          )}
                           <span
                             className={`absolute bottom-1 left-1 rounded px-1.5 py-0.5 font-mono text-[9.5px] ${
                               d <= 1
