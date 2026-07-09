@@ -41,6 +41,7 @@ export function unitSnapshot(u: any) {
 }
 
 export const endpoints = {
+  healthz: () => api.get("/healthz"),
   me: () => api.get(`${B}/auth/me`),
   login: (username: string, password: string) =>
     api.post(`${B}/auth/login`, { username, password }),

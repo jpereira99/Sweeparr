@@ -35,7 +35,7 @@ const GROUPS: {
 export function GlobalBanner() {
   const { data } = useQuery({
     queryKey: ["healthz"],
-    queryFn: () => endpoints.settings(),
+    queryFn: endpoints.healthz,
     refetchInterval: 15000,
   });
   const navigate = useNavigate();
@@ -59,6 +59,11 @@ export function GlobalBanner() {
 export function Shell({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: endpoints.me });
+  const { data: health } = useQuery({
+    queryKey: ["healthz"],
+    queryFn: endpoints.healthz,
+    staleTime: 60_000,
+  });
   const { data: dash } = useQuery({
     queryKey: ["dash-badge"],
     queryFn: endpoints.dashboard,
@@ -130,18 +135,25 @@ export function Shell({ children }: { children: ReactNode }) {
               })}
             </div>
           ))}
-          <div className="mt-auto flex items-center gap-2 border-t border-line-subtle px-2 py-3 text-[11px] text-ink-faint">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-pill bg-line text-[10px] text-ink-mid">
-              {(me?.name ?? "?")[0]?.toUpperCase()}
-            </span>
-            <span className="min-w-0 truncate text-ink-mid">{me?.name}</span>
-            <button
-              type="button"
-              onClick={() => void logout()}
-              className="ml-auto shrink-0 text-ink-low transition-colors hover:text-ink-hi"
-            >
-              Log out
-            </button>
+          <div className="mt-auto">
+            {health?.version && (
+              <div className="px-2 pb-2 font-mono text-[10px] text-ink-faint">
+                v{health.version}
+              </div>
+            )}
+            <div className="flex items-center gap-2 border-t border-line-subtle px-2 py-3 text-[11px] text-ink-faint">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-pill bg-line text-[10px] text-ink-mid">
+                {(me?.name ?? "?")[0]?.toUpperCase()}
+              </span>
+              <span className="min-w-0 truncate text-ink-mid">{me?.name}</span>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="ml-auto shrink-0 text-ink-low transition-colors hover:text-ink-hi"
+              >
+                Log out
+              </button>
+            </div>
           </div>
         </aside>
         <main className="min-h-0 min-w-0 flex-1 overflow-auto p-8">{children}</main>

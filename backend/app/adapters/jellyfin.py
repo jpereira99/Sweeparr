@@ -11,6 +11,7 @@ from typing import Any, Optional
 
 import httpx
 
+from .. import __version__
 from .base import IntegrationAdapter
 
 
@@ -145,7 +146,7 @@ class JellyfinAdapter(IntegrationAdapter):
         url = f"{self.base_url}/Users/AuthenticateByName"
         auth_header = (
             'MediaBrowser Client="Sweeparr", Device="Sweeparr", '
-            'DeviceId="sweeparr", Version="1.0.0"'
+            f'DeviceId="sweeparr", Version="{__version__}"'
         )
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
