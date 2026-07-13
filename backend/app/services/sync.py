@@ -124,6 +124,38 @@ async def sync_radarr(session: AsyncSession) -> dict[str, Any]:
     return {"upserted": upserted, "disk": disk}
 
 
+async def _newest_file_dates(
+    sonarr: Any, series: dict[str, Any], seasons: list[dict[str, Any]]
+) -> dict[int, datetime]:
+    """Newest episode-file ``dateAdded`` per season number, for season age rules.
+
+    Sonarr's season ``statistics`` has no per-season file date, so we read the
+    episode files directly. Skipped (and left empty) when the series has no files
+    on disk, so unaired/empty seasons keep ``newest_file_date`` unset. Failures
+    degrade to an empty map rather than breaking the whole sync.
+    """
+    has_files = any(
+        (sea.get("statistics", {}) or {}).get("episodeFileCount", 0) > 0
+        for sea in seasons
+    )
+    if not has_files:
+        return {}
+    newest: dict[int, datetime] = {}
+    try:
+        files = await sonarr.get_episode_files(series["id"])
+    except Exception:  # noqa: BLE001
+        return {}
+    for f in files:
+        added = _parse_dt(f.get("dateAdded"))
+        num = f.get("seasonNumber")
+        if added is None or num is None:
+            continue
+        current = newest.get(num)
+        if current is None or added > current:
+            newest[num] = added
+    return newest
+
+
 async def sync_sonarr(session: AsyncSession) -> dict[str, Any]:
     sonarr = get_integrations().sonarr
     if not sonarr.configured:
@@ -150,6 +182,7 @@ async def sync_sonarr(session: AsyncSession) -> dict[str, Any]:
         item.date_added_arr = _parse_dt(s.get("added"))
         await session.flush()
         seasons = [x for x in s.get("seasons", []) if x.get("seasonNumber", 0) > 0]
+        newest_by_season = await _newest_file_dates(sonarr, s, seasons)
         for idx, sea in enumerate(seasons):
             num = sea["seasonNumber"]
             existing = (
@@ -170,6 +203,7 @@ async def sync_sonarr(session: AsyncSession) -> dict[str, Any]:
             existing.monitored = sea.get("monitored", True)
             existing.size_bytes = stats.get("sizeOnDisk", 0)
             existing.episode_count = stats.get("episodeFileCount", 0)
+            existing.newest_file_date = newest_by_season.get(num)
             existing.is_latest_season = idx == len(seasons) - 1
         item.size_bytes = (s.get("statistics") or {}).get("sizeOnDisk", 0)
         upserted += 1
