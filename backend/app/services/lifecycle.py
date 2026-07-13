@@ -78,10 +78,18 @@ async def _movie_units(
 async def _season_units(
     session: AsyncSession, library: Optional[str] = None
 ) -> list[Unit]:
+    # Only seasons with downloaded episodes are deletable units. Sonarr creates
+    # a Season row for every season it knows about (including future/unaired ones
+    # with no files); those have nothing on disk to delete and must never be
+    # scheduled. Excluding them here also auto-demotes any that were previously
+    # scheduled — `_demote_stale` reverts scheduled seasons no longer matched.
     stmt = (
         select(Season, MediaItem)
         .join(MediaItem, Season.media_item_id == MediaItem.id)
-        .where(MediaItem.deleted_externally == False)  # noqa: E712
+        .where(
+            MediaItem.deleted_externally == False,  # noqa: E712
+            Season.episode_count > 0,
+        )
         .options(selectinload(Season.facts), selectinload(MediaItem.facts))
     )
     if library:
