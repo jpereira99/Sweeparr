@@ -270,6 +270,7 @@ export function Settings() {
     Record<string, { url: string; api_key: string; topic?: string }>
   >({});
   const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
+  const [runningAll, setRunningAll] = useState(false);
   const [delayDraft, setDelayDraft] = useState<{
     days?: number;
     max?: number;
@@ -325,6 +326,32 @@ export function Settings() {
     await endpoints.updateSettings({ system_enabled: on });
     toast(on ? "System running" : "System paused");
     qc.invalidateQueries();
+  }
+
+  async function runAllJobs() {
+    const jobs = data?.jobs ?? [];
+    if (!jobs.length || runningAll) return;
+    setRunningAll(true);
+    let ok = 0;
+    let failed = 0;
+    try {
+      for (const j of jobs) {
+        try {
+          await endpoints.runJob(j.name);
+          ok += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      toast(
+        failed === 0
+          ? `Ran all ${ok} jobs`
+          : `Ran ${ok} jobs · ${failed} failed`,
+      );
+      qc.invalidateQueries();
+    } finally {
+      setRunningAll(false);
+    }
   }
 
   async function saveValues(patch: Record<string, unknown>, msg: string) {
@@ -526,8 +553,17 @@ export function Settings() {
           )}
 
           <Card className="overflow-hidden !p-0">
-            <div className="border-b border-line-subtle px-5 pt-4">
+            <div className="flex items-center justify-between gap-2 border-b border-line-subtle px-5 pt-4">
               <SectionLabel>Job schedules</SectionLabel>
+              <div className="mb-3">
+                <Button
+                  size="sm"
+                  disabled={runningAll || !(data.jobs ?? []).length}
+                  onClick={runAllJobs}
+                >
+                  {runningAll ? "Running…" : "Run All"}
+                </Button>
+              </div>
             </div>
             <div className="divide-y divide-line-subtle">
               {(data.jobs ?? []).map((j: any) => (
@@ -560,6 +596,7 @@ export function Settings() {
                       </span>
                       <Button
                         size="sm"
+                        disabled={runningAll}
                         onClick={async () => {
                           await endpoints.runJob(j.name);
                           toast(`Ran ${j.name}`);
