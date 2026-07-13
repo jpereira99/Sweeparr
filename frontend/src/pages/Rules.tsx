@@ -149,7 +149,10 @@ function rulePayload(rule: Record<string, unknown>) {
   );
 }
 
-function rulesEqual(a: Record<string, unknown> | null | undefined, b: Record<string, unknown> | null | undefined) {
+function rulesEqual(
+  a: Record<string, unknown> | null | undefined,
+  b: Record<string, unknown> | null | undefined,
+) {
   if (!a || !b) return a === b;
   return JSON.stringify(rulePayload(a)) === JSON.stringify(rulePayload(b));
 }
@@ -427,10 +430,7 @@ function Builder({
           {draft.enabled ? "● ON" : "○ OFF"}
         </span>
         {!draft.enabled && saveStatus !== "idle" && (
-          <span
-            className="text-[11px] text-ink-low"
-            aria-live="polite"
-          >
+          <span className="text-[11px] text-ink-low" aria-live="polite">
             {saveStatus === "saving" ? "Saving…" : "Saved"}
           </span>
         )}
@@ -477,27 +477,27 @@ function Builder({
           {rules.map((r: any) => {
             const enabled = r.id === draft.id ? draft.enabled : r.enabled;
             return (
-            <button
-              key={r.id}
-              onClick={() => onSelect(r.id)}
-              className={`rounded p-2.5 text-left ${r.id === draft.id ? "border border-line bg-bg-raised" : ""}`}
-            >
-              <div
-                className={`mb-1.5 text-[12.5px] font-medium ${r.id === draft.id ? "text-ink-hi" : "text-ink-mid"}`}
+              <button
+                key={r.id}
+                onClick={() => onSelect(r.id)}
+                className={`rounded p-2.5 text-left ${r.id === draft.id ? "border border-line bg-bg-raised" : ""}`}
               >
-                {r.name}
-              </div>
-              <span
-                className={`inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-[9.5px] font-bold tracking-[0.06em] ${
-                  enabled
-                    ? "border border-[rgba(229,72,77,0.4)] bg-[rgba(229,72,77,0.14)] text-state-scheduled-ink"
-                    : "border border-[rgba(139,150,168,0.28)] bg-[rgba(139,150,168,0.12)] text-ink-mid"
-                }`}
-              >
-                {enabled ? "ON" : "OFF"}
-              </span>
-            </button>
-          );
+                <div
+                  className={`mb-1.5 text-[12.5px] font-medium ${r.id === draft.id ? "text-ink-hi" : "text-ink-mid"}`}
+                >
+                  {r.name}
+                </div>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-[9.5px] font-bold tracking-[0.06em] ${
+                    enabled
+                      ? "border border-[rgba(229,72,77,0.4)] bg-[rgba(229,72,77,0.14)] text-state-scheduled-ink"
+                      : "border border-[rgba(139,150,168,0.28)] bg-[rgba(139,150,168,0.12)] text-ink-mid"
+                  }`}
+                >
+                  {enabled ? "ON" : "OFF"}
+                </span>
+              </button>
+            );
           })}
         </div>
 
