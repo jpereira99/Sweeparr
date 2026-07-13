@@ -5,7 +5,7 @@
 **Close the loop on your media library.** Request → Acquire → Watch → Age → **Warn → Remove.**
 
 Sweeparr is a single, lightweight, self-hosted microservice that watches your Jellyfin / Jellyseerr /
-Sonarr / Radarr stack and *schedules* stale media for removal — visibly, reversibly, and on a grace
+Sonarr / Radarr stack and _schedules_ stale media for removal — visibly, reversibly, and on a grace
 period — instead of silently nuking files. It never touches the filesystem directly; every deletion
 goes through the Sonarr/Radarr APIs so your `*arr` state stays consistent.
 
@@ -17,8 +17,8 @@ goes through the Sonarr/Radarr APIs so your `*arr` state stays consistent.
 
 ## Design tenets
 
-- **Visible before destructive.** Everything appears on an *Upcoming Removals* board with a countdown
-  and a one-tap **Keep** long before anything is deleted. The grace period *is* the safety model — no
+- **Visible before destructive.** Everything appears on an _Upcoming Removals_ board with a countdown
+  and a one-tap **Keep** long before anything is deleted. The grace period _is_ the safety model — no
   approval-gate friction, just an easy veto window.
 - **Two speeds of veto.** Admins choose whether household members can **request to keep** (admin
   approves), self-service **delay** the removal by a fixed number of days (automatic, no queue, capped
@@ -35,12 +35,12 @@ goes through the Sonarr/Radarr APIs so your `*arr` state stays consistent.
 
 ## Architecture
 
-| Layer      | Tech |
-|------------|------|
-| Backend    | FastAPI · Uvicorn · SQLAlchemy 2 (async) · APScheduler · httpx · Pydantic v2 |
-| Storage    | SQLite (WAL, single-writer) at `/config/sweeparr.db` |
-| Frontend   | React 18 · Vite · Tailwind · TanStack Query · Recharts |
-| Deploy     | One multi-stage Docker image, one `/config` volume |
+| Layer    | Tech                                                                         |
+| -------- | ---------------------------------------------------------------------------- |
+| Backend  | FastAPI · Uvicorn · SQLAlchemy 2 (async) · APScheduler · httpx · Pydantic v2 |
+| Storage  | SQLite (WAL, single-writer) at `/config/sweeparr.db`                         |
+| Frontend | React 18 · Vite · Tailwind · TanStack Query · Recharts                       |
+| Deploy   | One multi-stage Docker image, one `/config` volume                           |
 
 The React SPA is built into `backend/static/spa` and served by the same FastAPI process, so there is
 exactly one thing to run.
@@ -63,18 +63,18 @@ handled at **season** granularity; movies as a whole.
 
 ### Sync jobs
 
-| Job | Interval | What it does |
-|-----|----------|--------------|
-| `sync_radarr` | 45 min | Upsert movies from Radarr; refresh disk-usage gauges |
-| `sync_sonarr` | 45 min | Upsert series/seasons from Sonarr; refresh disk gauges |
-| `sync_jellyfin` | 45 min | Link Jellyfin IDs; pull per-user watch stats (`UserData`) |
-| `sync_jellyseerr` | 30 min | Ingest request metadata |
-| `aggregate_playback` | 15 min | Roll up playback sessions into watch facts |
-| `evaluate_rules` | 8 h | Match enabled rules against the library |
-| `execute_deletions` | 1 h | Delete units past grace (when system is on) |
-| `notify` | 1 h | Reminder notifications |
-| `sync_leaving_collection` | 1 h | Jellyfin "leaving soon" collection |
-| `housekeeping` | 24 h | Prune old playback events |
+| Job                       | Interval | What it does                                              |
+| ------------------------- | -------- | --------------------------------------------------------- |
+| `sync_radarr`             | 45 min   | Upsert movies from Radarr; refresh disk-usage gauges      |
+| `sync_sonarr`             | 45 min   | Upsert series/seasons from Sonarr; refresh disk gauges    |
+| `sync_jellyfin`           | 45 min   | Link Jellyfin IDs; pull per-user watch stats (`UserData`) |
+| `sync_jellyseerr`         | 30 min   | Ingest request metadata                                   |
+| `aggregate_playback`      | 15 min   | Roll up playback sessions into watch facts                |
+| `evaluate_rules`          | 8 h      | Match enabled rules against the library                   |
+| `execute_deletions`       | 1 h      | Delete units past grace (when system is on)               |
+| `notify`                  | 1 h      | Reminder notifications                                    |
+| `sync_leaving_collection` | 1 h      | Jellyfin "leaving soon" collection                        |
+| `housekeeping`            | 24 h     | Prune old playback events                                 |
 
 On first boot with an empty library, Sweeparr automatically runs library syncs when Sonarr or Radarr
 are configured. Saving an integration in **Settings** also triggers the relevant sync jobs
@@ -135,14 +135,14 @@ cd frontend && npm run build
 
 See [`.env.example`](.env.example). These are read at startup:
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `SWEEPARR_TIMEZONE` | `America/New_York` | Schedule + countdown timezone |
-| `SWEEPARR_SESSION_SECRET` | — | Signs session cookies (set a long random value) |
-| `SWEEPARR_ADMIN_USERNAME` | `admin` | Local admin username (created on first boot only) |
-| `SWEEPARR_ADMIN_PASSWORD` | `admin` | Local admin password (change after first login) |
-| `SWEEPARR_{JELLYFIN,JELLYSEERR,SONARR,RADARR}_{URL,API_KEY}` | — | Optional: seed integrations into DB on first boot |
-| `SWEEPARR_NTFY_URL` / `_TOPIC` | — | Optional: seed ntfy notification settings |
+| Variable                                                     | Default            | Purpose                                           |
+| ------------------------------------------------------------ | ------------------ | ------------------------------------------------- |
+| `SWEEPARR_TIMEZONE`                                          | `America/New_York` | Schedule + countdown timezone                     |
+| `SWEEPARR_SESSION_SECRET`                                    | —                  | Signs session cookies (set a long random value)   |
+| `SWEEPARR_ADMIN_USERNAME`                                    | `admin`            | Local admin username (created on first boot only) |
+| `SWEEPARR_ADMIN_PASSWORD`                                    | `admin`            | Local admin password (change after first login)   |
+| `SWEEPARR_{JELLYFIN,JELLYSEERR,SONARR,RADARR}_{URL,API_KEY}` | —                  | Optional: seed integrations into DB on first boot |
+| `SWEEPARR_NTFY_URL` / `_TOPIC`                               | —                  | Optional: seed ntfy notification settings         |
 
 Integration URLs and API keys are stored in the **database** after first boot. The Settings UI is
 the source of truth — env values only seed missing entries once. API keys are never returned in full
@@ -157,7 +157,7 @@ Managed in the admin **Settings** page and persisted in the `settings` table:
 - **Keep & delay options** — toggle household **keep requests** and self-service **delay**
   independently, and set how many days each delay adds (`delay_days`) and how many times a single
   item can be delayed (`delay_max_count`)
-- **Automatic protections** — independently toggle each *system* protection (Jellyfin favorites,
+- **Automatic protections** — independently toggle each _system_ protection (Jellyfin favorites,
   airing series, the `sweeparr-keep` arr tag) and the recently-requested window
   (`request_protection_days`, in days; `0` disables it). These are the conditions that can push a
   matched unit to **KEPT** without any admin action — see [Safety model](#safety-model-in-one-paragraph).
@@ -166,10 +166,10 @@ Managed in the admin **Settings** page and persisted in the `settings` table:
 
 ## Authentication
 
-| Method | Who | Notes |
-|--------|-----|-------|
-| Local admin | Username + password from `.env` | Bootstrapped on first run; password changeable in Settings |
-| Jellyfin pass-through | Jellyfin admin users | Uses `/Users/AuthenticateByName`; requires Jellyfin configured |
+| Method                | Who                             | Notes                                                          |
+| --------------------- | ------------------------------- | -------------------------------------------------------------- |
+| Local admin           | Username + password from `.env` | Bootstrapped on first run; password changeable in Settings     |
+| Jellyfin pass-through | Jellyfin admin users            | Uses `/Users/AuthenticateByName`; requires Jellyfin configured |
 
 The admin console is the only authenticated UI. Household members can still **request to keep** or
 **self-delay** media via magic links (`/keep/:token`) surfaced in Jellyfin inject banners — no
@@ -180,7 +180,9 @@ per-instance in **Settings → Keep & delay options**.
 
 Rules are **off by default**. Workflow:
 
-1. **Create** — pick a preset (stale movies, never-played requests, etc.) or start blank
+1. **Create** — pick a preset (stale movies, never-played requests, watched and done, big and
+   unwatched, stale seasons, ended and fully watched) or start blank. Disabled rules autosave as you
+   edit; enabled rules require a manual save.
 2. **Build** — condition tree with live preview (click preview to see the full match list)
 3. **Enable** — schedules matching units for deletion after the grace period
 4. **Disable** — reverts scheduled units back to `ACTIVE`
@@ -195,15 +197,15 @@ list.
 - **"Leaving Soon" collection** — surfaced natively via the Jellyfin API.
 - **Pills & banners** — drop the versioned inject script into your Jellyfin web client:
 
-  ```html
-  <script src="http://<sweeparr-host>:8000/static/inject/sweeparr.js"></script>
-  ```
+    ```html
+    <script src="http://<sweeparr-host>:8000/static/inject/sweeparr.js"></script>
+    ```
 
-  It reads only public-safe fields from the cached `/flags` endpoint, renders a "Leaving <date>" pill
-  plus a dismissible banner with **Request to keep** and/or **Delay N days** buttons (shown based on
-  what's enabled in Settings), and fails silently on any Jellyfin DOM change. Delaying is instant — no
-  admin approval, and no keep-request queue entry is created — while keep still routes through the
-  admin approval queue.
+    It reads only public-safe fields from the cached `/flags` endpoint, renders a "Leaving <date>" pill
+    plus a dismissible banner with **Request to keep** and/or **Delay N days** buttons (shown based on
+    what's enabled in Settings), and fails silently on any Jellyfin DOM change. Delaying is instant — no
+    admin approval, and no keep-request queue entry is created — while keep still routes through the
+    admin approval queue.
 
 ## Safety model in one paragraph
 
@@ -213,7 +215,7 @@ a scheduled item, and they live on different layers:
 
 - **Keep** is a protection-layer veto: an admin (directly, or by approving a household keep request)
   moves the unit to **KEPT** indefinitely, taking it out of the rule pipeline entirely. It stays kept
-  until an admin **releases** it, which returns it to `ACTIVE` for normal evaluation. A *pending* keep
+  until an admin **releases** it, which returns it to `ACTIVE` for normal evaluation. A _pending_ keep
   request pauses deletion (execution hold) until the admin decides; a denied request simply leaves the
   item on its existing schedule.
 - **Delay** is a scheduling-layer nudge: one capped, floor-setting mechanism shared by admins and
@@ -228,7 +230,7 @@ and delay. Disabling a rule or pausing the system stops new scheduling; existing
 still be kept, delayed, or manually unscheduled.
 
 **KEPT isn't always an admin decision.** A matched unit can also land in KEPT because it currently
-trips one of the *system* protections — a Jellyfin favorite, the latest season of an airing show, the
+trips one of the _system_ protections — a Jellyfin favorite, the latest season of an airing show, the
 `sweeparr-keep` tag in Sonarr/Radarr, or a recent Jellyseerr request — each independently toggleable in
 **Settings → Automatic protections**. Whenever this happens, every reason is written to the
 `protection` table (not just logged) so the **Keeps** page can show exactly which condition(s) are
