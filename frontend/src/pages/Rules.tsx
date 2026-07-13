@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { endpoints } from "../lib/api";
 import { PageHeader } from "./Dashboard";
 import { Button, EmptyState, Skeleton, Toggle } from "../components/ui";
@@ -22,6 +22,8 @@ type RulePreset = {
   description: string;
   target: "movie" | "season" | "series";
   conditions: Cond;
+  grace_days?: number;
+  notify_requester?: boolean;
 };
 
 const RULE_PRESETS: RulePreset[] = [
@@ -35,12 +37,13 @@ const RULE_PRESETS: RulePreset[] = [
   {
     id: "stale-movies",
     name: "Stale movies",
-    description: "Added 180+ days ago and not watched in the last 90 days.",
+    description: "Added 120+ days ago and not watched in the last 90 days.",
     target: "movie",
+    grace_days: 30,
     conditions: {
       op: "AND",
       conditions: [
-        { field: "age_days", cmp: ">=", value: 180 },
+        { field: "age_days", cmp: ">=", value: 120 },
         { field: "last_watched_days", cmp: ">=", value: 90 },
       ],
     },
@@ -48,32 +51,115 @@ const RULE_PRESETS: RulePreset[] = [
   {
     id: "never-played-requests",
     name: "Never-played requests",
-    description: "Requested items that have never been played.",
+    description:
+      "Requested 90+ days ago with zero plays — notifies the requester.",
     target: "movie",
+    grace_days: 21,
+    notify_requester: true,
     conditions: {
       op: "AND",
       conditions: [
         { field: "was_requested", cmp: "==", value: true },
         { field: "total_plays", cmp: "==", value: 0 },
+        { field: "requested_days_ago", cmp: ">=", value: 90 },
       ],
     },
   },
   {
-    id: "inactive-requester-seasons",
-    name: "Inactive-requester seasons",
-    description: "Seasons requested by users inactive for 60+ days.",
-    target: "season",
+    id: "watched-and-done",
+    name: "Watched and done",
+    description:
+      "Finished movies (85%+ completion) not rewatched in 60 days, excluding favorites.",
+    target: "movie",
+    grace_days: 30,
     conditions: {
       op: "AND",
-      conditions: [{ field: "requester_inactive_days", cmp: ">=", value: 60 }],
+      conditions: [
+        { field: "max_completion_pct", cmp: ">=", value: 85 },
+        { field: "last_watched_days", cmp: ">=", value: 60 },
+        { field: "is_favorite_any_user", cmp: "==", value: false },
+      ],
+    },
+  },
+  {
+    id: "big-and-unwatched",
+    name: "Big and unwatched",
+    description: "Large files (20+ GB) with zero plays added 90+ days ago.",
+    target: "movie",
+    grace_days: 14,
+    conditions: {
+      op: "AND",
+      conditions: [
+        { field: "size_gb", cmp: ">=", value: 20 },
+        { field: "total_plays", cmp: "==", value: 0 },
+        { field: "age_days", cmp: ">=", value: 90 },
+      ],
+    },
+  },
+  {
+    id: "stale-seasons",
+    name: "Stale seasons",
+    description:
+      "Older seasons not watched in 120 days — skips the latest season.",
+    target: "season",
+    grace_days: 30,
+    conditions: {
+      op: "AND",
+      conditions: [
+        { field: "season_age_days", cmp: ">=", value: 180 },
+        { field: "season_last_watched_days", cmp: ">=", value: 120 },
+        { field: "is_latest_season", cmp: "==", value: false },
+      ],
+    },
+  },
+  {
+    id: "ended-and-watched",
+    name: "Ended and fully watched",
+    description:
+      "Completed seasons from ended series, 90%+ watched, not rewatched in 90 days.",
+    target: "season",
+    grace_days: 45,
+    conditions: {
+      op: "AND",
+      conditions: [
+        { field: "series_status", cmp: "==", value: "ended" },
+        { field: "pct_season_watched", cmp: ">=", value: 90 },
+        { field: "season_last_watched_days", cmp: ">=", value: 90 },
+      ],
     },
   },
 ];
 
+const RULE_SAVE_KEYS = [
+  "name",
+  "target",
+  "library",
+  "conditions",
+  "grace_days",
+  "notify_requester",
+  "notify_admin",
+  "add_import_list_exclusion",
+  "mirror_arr_tags",
+  "disk_overrides",
+] as const;
+
+function rulePayload(rule: Record<string, unknown>) {
+  return Object.fromEntries(
+    RULE_SAVE_KEYS.filter((k) => k in rule).map((k) => [k, rule[k]]),
+  );
+}
+
+function rulesEqual(
+  a: Record<string, unknown> | null | undefined,
+  b: Record<string, unknown> | null | undefined,
+) {
+  if (!a || !b) return a === b;
+  return JSON.stringify(rulePayload(a)) === JSON.stringify(rulePayload(b));
+}
+
 export function RulesPage() {
   const qc = useQueryClient();
   const toast = useToast();
-  const navigate = useNavigate();
   const params = useParams();
   const { data, isLoading } = useQuery({
     queryKey: ["rules"],
@@ -102,7 +188,10 @@ export function RulesPage() {
         name: preset.id === "blank" ? "New rule" : preset.name,
         target: preset.target,
         conditions: preset.conditions,
-        grace_days: 30,
+        grace_days: preset.grace_days ?? 30,
+        ...(preset.notify_requester != null
+          ? { notify_requester: preset.notify_requester }
+          : {}),
       });
       await qc.invalidateQueries({ queryKey: ["rules"] });
       setSelectedId(created.id);
@@ -138,7 +227,6 @@ export function RulesPage() {
           onNew={() => setNewRuleModal(true)}
           toast={toast}
           qc={qc}
-          navigate={navigate}
         />
       )}
       {newRuleModal && (
@@ -161,7 +249,6 @@ function Builder({
   onNew,
   toast,
   qc,
-  navigate,
 }: any) {
   const [draft, setDraft] = useState<any>(selected);
   const [preview, setPreview] = useState<any>(null);
@@ -169,15 +256,80 @@ function Builder({
   const [enableModal, setEnableModal] = useState(false);
   const [deleteModal, setDeleteModal] = useState(false);
   const [previewModal, setPreviewModal] = useState(false);
-  const debounce = useRef<any>();
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
+    "idle",
+  );
+  const previewDebounce = useRef<any>();
+  const autosaveDebounce = useRef<any>();
+  const autosaveSeq = useRef(0);
+  const draftRef = useRef<any>(selected);
 
-  useEffect(() => setDraft(selected), [selected?.id]);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    if (!selected) return;
+
+    if (
+      draftRef.current?.id != null &&
+      draftRef.current.id !== selected.id &&
+      !draftRef.current.enabled
+    ) {
+      clearTimeout(autosaveDebounce.current);
+      const snapshot = draftRef.current;
+      const serverRule = rules.find((r: any) => r.id === snapshot.id);
+      if (!serverRule || !rulesEqual(snapshot, serverRule)) {
+        void endpoints.updateRule(snapshot.id, rulePayload(snapshot));
+      }
+    }
+
+    setDraft((prev: any) => {
+      if (prev?.id !== selected.id) return selected;
+      return { ...prev, enabled: selected.enabled };
+    });
+  }, [selected?.id, selected?.enabled, selected, rules]);
+
+  useEffect(() => {
+    if (!draft || draft.enabled || !selected) return;
+    if (rulesEqual(draft, selected)) {
+      setSaveStatus("idle");
+      return;
+    }
+
+    setSaveStatus("saving");
+    clearTimeout(autosaveDebounce.current);
+    autosaveDebounce.current = setTimeout(async () => {
+      const seq = ++autosaveSeq.current;
+      const snapshot = draftRef.current;
+      if (!snapshot || snapshot.enabled) return;
+      try {
+        await endpoints.updateRule(snapshot.id, rulePayload(snapshot));
+        if (seq !== autosaveSeq.current) return;
+        await qc.invalidateQueries({ queryKey: ["rules"] });
+        setSaveStatus("saved");
+      } catch {
+        if (seq === autosaveSeq.current) setSaveStatus("idle");
+      }
+    }, 800);
+
+    return () => clearTimeout(autosaveDebounce.current);
+  }, [draft, selected, qc]);
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(autosaveDebounce.current);
+      const snapshot = draftRef.current;
+      if (!snapshot || snapshot.enabled) return;
+      void endpoints.updateRule(snapshot.id, rulePayload(snapshot));
+    };
+  }, []);
 
   useEffect(() => {
     if (!draft) return;
     setPreviewStale(true);
-    clearTimeout(debounce.current);
-    debounce.current = setTimeout(async () => {
+    clearTimeout(previewDebounce.current);
+    previewDebounce.current = setTimeout(async () => {
       try {
         const r = await endpoints.preview({
           target: draft.target,
@@ -190,30 +342,43 @@ function Builder({
         setPreviewStale(false);
       }
     }, 400);
-    return () => clearTimeout(debounce.current);
+    return () => clearTimeout(previewDebounce.current);
   }, [draft?.conditions, draft?.target, draft?.library]);
 
   if (!draft) return null;
 
   const update = (patch: any) => setDraft((d: any) => ({ ...d, ...patch }));
+  const isDirty = !rulesEqual(draft, selected);
+
+  async function flushAutosave() {
+    clearTimeout(autosaveDebounce.current);
+    const snapshot = draftRef.current;
+    if (!snapshot || snapshot.enabled) return;
+    const serverRule = rules.find((r: any) => r.id === snapshot.id);
+    if (serverRule && rulesEqual(snapshot, serverRule)) return;
+    await endpoints.updateRule(snapshot.id, rulePayload(snapshot));
+    await qc.invalidateQueries({ queryKey: ["rules"] });
+  }
 
   async function save() {
-    await endpoints.updateRule(draft.id, draft);
+    await endpoints.updateRule(draft.id, rulePayload(draft));
     await qc.invalidateQueries({ queryKey: ["rules"] });
     toast("Rule saved");
   }
 
   async function toggleEnabled(on: boolean) {
-    await save();
     if (on) {
+      if (!draft.enabled && isDirty) await flushAutosave();
       await endpoints.enableRule(draft.id);
+      setDraft((d: any) => ({ ...d, enabled: true }));
       toast(`Enabled "${draft.name}" — matches are now scheduled`);
-      navigate("/upcoming");
     } else {
+      if (isDirty) await save();
       await endpoints.disableRule(draft.id);
+      setDraft((d: any) => ({ ...d, enabled: false }));
       toast(`Disabled "${draft.name}" — scheduled units reverted`);
     }
-    await qc.invalidateQueries();
+    await qc.invalidateQueries({ queryKey: ["rules"] });
     setEnableModal(false);
   }
 
@@ -264,6 +429,16 @@ function Builder({
         >
           {draft.enabled ? "● ON" : "○ OFF"}
         </span>
+        {!draft.enabled && saveStatus !== "idle" && (
+          <span className="text-[11px] text-ink-low" aria-live="polite">
+            {saveStatus === "saving" ? "Saving…" : "Saved"}
+          </span>
+        )}
+        {draft.enabled && isDirty && (
+          <span className="text-[11px] text-state-scheduled-ink">
+            Unsaved changes
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-3">
           <label className="flex items-center gap-2 text-[12px] text-ink-mid">
             <span>Rule</span>
@@ -275,7 +450,11 @@ function Builder({
               }}
             />
           </label>
-          <Button onClick={save}>Save</Button>
+          {draft.enabled && (
+            <Button onClick={save} disabled={!isDirty}>
+              Save
+            </Button>
+          )}
           <Button variant="danger" onClick={() => setDeleteModal(true)}>
             Delete
           </Button>
@@ -295,28 +474,31 @@ function Builder({
               + New
             </button>
           </div>
-          {rules.map((r: any) => (
-            <button
-              key={r.id}
-              onClick={() => onSelect(r.id)}
-              className={`rounded p-2.5 text-left ${r.id === draft.id ? "border border-line bg-bg-raised" : ""}`}
-            >
-              <div
-                className={`mb-1.5 text-[12.5px] font-medium ${r.id === draft.id ? "text-ink-hi" : "text-ink-mid"}`}
+          {rules.map((r: any) => {
+            const enabled = r.id === draft.id ? draft.enabled : r.enabled;
+            return (
+              <button
+                key={r.id}
+                onClick={() => onSelect(r.id)}
+                className={`rounded p-2.5 text-left ${r.id === draft.id ? "border border-line bg-bg-raised" : ""}`}
               >
-                {r.name}
-              </div>
-              <span
-                className={`inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-[9.5px] font-bold tracking-[0.06em] ${
-                  r.enabled
-                    ? "border border-[rgba(229,72,77,0.4)] bg-[rgba(229,72,77,0.14)] text-state-scheduled-ink"
-                    : "border border-[rgba(139,150,168,0.28)] bg-[rgba(139,150,168,0.12)] text-ink-mid"
-                }`}
-              >
-                {r.enabled ? "ON" : "OFF"}
-              </span>
-            </button>
-          ))}
+                <div
+                  className={`mb-1.5 text-[12.5px] font-medium ${r.id === draft.id ? "text-ink-hi" : "text-ink-mid"}`}
+                >
+                  {r.name}
+                </div>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-[9.5px] font-bold tracking-[0.06em] ${
+                    enabled
+                      ? "border border-[rgba(229,72,77,0.4)] bg-[rgba(229,72,77,0.14)] text-state-scheduled-ink"
+                      : "border border-[rgba(139,150,168,0.28)] bg-[rgba(139,150,168,0.12)] text-ink-mid"
+                  }`}
+                >
+                  {enabled ? "ON" : "OFF"}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="min-w-0 flex-1 p-6">
@@ -483,6 +665,9 @@ function Builder({
                 {gb(preview?.total_gb)}
               </span>{" "}
               for deletion after the grace period.
+              <span className="mt-2 block text-[12px] text-ink-low">
+                Once enabled, changes to this rule require a manual save.
+              </span>
             </>
           }
           confirmLabel="Enable rule"
