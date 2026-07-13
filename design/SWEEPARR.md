@@ -582,7 +582,8 @@ Only Jellyfin admins and the local admin reach the admin console.
 
 - `sync_radarr` / `sync_sonarr` — upsert library + call `/api/v3/diskspace` → `disk` settings
 - `sync_jellyfin` — paginated library ID link + **per-user UserData pull** (`IsPlayed` /
-  `IsResumable` filters) → `item_watch_facts` / `season_watch_facts`
+  `IsResumable` / `IsFavorite` filters; Series favorites via `IsFavorite`) →
+  `item_watch_facts` / `season_watch_facts`
 - On empty library at startup: auto-run library syncs if Sonarr/Radarr configured
 - On integration save in Settings: probe health + run relevant sync jobs immediately
 

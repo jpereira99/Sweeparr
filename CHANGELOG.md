@@ -2,6 +2,14 @@
 
 All notable changes to Sweeparr are documented here.
 
+## [1.1.1] - 2026-07-13
+
+### Fixed
+
+- Jellyfin favorites now protect content correctly: sync pulls `IsFavorite` (including unwatched
+  items and Series-level favorites), season facts expose `is_favorite_any_user`, and unfavorites
+  clear protection on the next sync.
+
 ## [1.1.0] - 2026-07-13
 
 ### Added
