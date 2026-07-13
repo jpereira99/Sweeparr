@@ -74,19 +74,20 @@ class JellyfinAdapter(IntegrationAdapter):
         *,
         include_types: str,
         limit: int = 200,
+        filters: tuple[str, ...] = ("IsPlayed", "IsResumable", "IsFavorite"),
     ):
-        """Yield items a user has played or partially watched (UserData populated)."""
+        """Yield items matching the given UserData filters (played, resumable, favorite)."""
         fields = (
             "UserData,RunTimeTicks,ProviderIds,SeriesId,ParentIndexNumber,IndexNumber"
         )
         seen: set[str] = set()
-        for filters in ("IsPlayed", "IsResumable"):
+        for filt in filters:
             start = 0
             while True:
                 data = await self._request(
                     "GET",
                     f"/Users/{user_id}/Items?Recursive=true&IncludeItemTypes={include_types}"
-                    f"&Fields={fields}&Filters={filters}&StartIndex={start}&Limit={limit}",
+                    f"&Fields={fields}&Filters={filt}&StartIndex={start}&Limit={limit}",
                 )
                 items = (data or {}).get("Items", [])
                 for it in items:

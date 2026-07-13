@@ -264,14 +264,16 @@ def _completion_pct(ud: dict[str, Any], runtime_ticks: int | None) -> float:
 def _apply_userdata(
     acc: _WatchAccum, jf_user_id: str, ud: dict[str, Any], runtime_ticks: int | None
 ) -> None:
+    # Favorites are independent of playback — apply before the play early-return
+    # so favorited-but-unwatched items still set the protection flag.
+    if ud.get("IsFavorite"):
+        acc.favorite = True
     plays = int(ud.get("PlayCount") or 0)
     pos = int(ud.get("PlaybackPositionTicks") or 0)
     if plays <= 0 and pos <= 0:
         return
     acc.play_count += plays
     acc.watchers.add(jf_user_id)
-    if ud.get("IsFavorite"):
-        acc.favorite = True
     played_at = _parse_dt(ud.get("LastPlayedDate"))
     if played_at and (acc.last_watched is None or played_at > _aware(acc.last_watched)):
         acc.last_watched = played_at
@@ -335,6 +337,23 @@ async def _sync_jellyfin_watch_stats(session: AsyncSession, jf) -> dict[str, Any
     for media_item_id, jf_id in rows:
         requester_jf_ids.setdefault(media_item_id, set()).add(jf_id)
 
+    # Clear stale favorites so unfavorited items lose protection on this sync.
+    linked_ids = [m.id for m in by_jf_id.values()]
+    if linked_ids:
+        existing_facts = (
+            (
+                await session.execute(
+                    select(ItemWatchFacts).where(
+                        ItemWatchFacts.media_item_id.in_(linked_ids)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for facts in existing_facts:
+            facts.is_favorite_any_user = False
+
     item_acc: dict[int, _WatchAccum] = {}
     season_acc: dict[int, _WatchAccum] = {}
     series_watched_eps: dict[int, set[str]] = {}
@@ -352,6 +371,18 @@ async def _sync_jellyfin_watch_stats(session: AsyncSession, jf) -> dict[str, Any
             ud = it.get("UserData") or {}
             acc = item_acc.setdefault(media.id, _WatchAccum())
             _apply_userdata(acc, jf_user_id, ud, it.get("RunTimeTicks"))
+
+        # Series favorites live on the Series row in Jellyfin — only apply the
+        # favorite bit so we don't double-count plays already rolled up from episodes.
+        async for it in jf.iter_user_watch_items(
+            jf_user_id, include_types="Series", filters=("IsFavorite",)
+        ):
+            media = by_jf_id.get(it.get("Id"))
+            if not media:
+                continue
+            ud = it.get("UserData") or {}
+            if ud.get("IsFavorite"):
+                item_acc.setdefault(media.id, _WatchAccum()).favorite = True
 
         async for it in jf.iter_user_watch_items(jf_user_id, include_types="Episode"):
             series_jf_id = it.get("SeriesId")

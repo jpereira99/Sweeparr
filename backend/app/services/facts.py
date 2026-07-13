@@ -127,6 +127,9 @@ async def build_season_facts(
         "total_plays": sfacts.total_plays if sfacts else 0,
         "distinct_watchers": sfacts.distinct_watchers if sfacts else 0,
         "watched_by_requester": sfacts.watched_by_requester if sfacts else False,
+        "is_favorite_any_user": (
+            item_facts.is_favorite_any_user if item_facts else False
+        ),
         "series_status": item.series_status,
         "pct_episodes_watched": item_facts.pct_episodes_watched if item_facts else 0.0,
         "has_tag": await _tags(session, item.id),

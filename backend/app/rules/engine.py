@@ -69,7 +69,7 @@ FIELD_CATALOG: list[dict[str, Any]] = [
         "field": "is_favorite_any_user",
         "category": "Watch",
         "type": "bool",
-        "applies": ["movie", "series"],
+        "applies": ["movie", "season", "series"],
     },
     # Request
     {
